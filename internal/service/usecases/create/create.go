@@ -81,7 +81,6 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 		Host:           svc.Host,
 		SSHUser:        svc.SSHUser,
 		SSHKeyPath:     svc.SSHKeyPath,
-		WebhookURL:     fmt.Sprintf("/webhooks/%s", svc.ID),
 		CreatedAt:      svc.CreatedAt,
 	})
 }

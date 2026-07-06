@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/result"
 )
 
@@ -13,8 +15,14 @@ type CreateServiceUseCase interface {
 	Execute(input create.CreateInput) result.Result[create.CreateOutput]
 }
 
+type GetServiceUseCase interface {
+	Execute(input get.GetInput) result.Result[get.GetOutput]
+}
+
 type ServiceHandlerDeps struct {
+	BaseURL       string
 	CreateService CreateServiceUseCase
+	GetService    GetServiceUseCase
 }
 
 type ServiceHandler struct {
@@ -27,6 +35,7 @@ func NewServiceHandler(deps ServiceHandlerDeps) *ServiceHandler {
 
 func (h *ServiceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /services", h.Create)
+	mux.HandleFunc("GET /services/{id}", h.Get)
 }
 
 // ── create ────────────────────────────────────────────────
@@ -42,7 +51,7 @@ type createServiceRequest struct {
 	SSHKeyPath     string `json:"ssh_key_path"`
 }
 
-type createServiceResponse struct {
+type serviceResponse struct {
 	ID             string `json:"id"`
 	Name           string `json:"name"`
 	RepoURL        string `json:"repo_url"`
@@ -53,6 +62,10 @@ type createServiceResponse struct {
 	SSHKeyPath     string `json:"ssh_key_path"`
 	WebhookURL     string `json:"webhook_url"`
 	CreatedAt      string `json:"created_at"`
+}
+
+func (h *ServiceHandler) webhookURL(id string) string {
+	return fmt.Sprintf("%s/webhooks/%s", h.deps.BaseURL, id)
 }
 
 func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -78,17 +91,18 @@ func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, createServiceResponse{
-		ID:             res.Value.ID,
-		Name:           res.Value.Name,
-		RepoURL:        res.Value.RepoURL,
-		Domain:         res.Value.Domain,
-		HealthCheckURL: res.Value.HealthCheckURL,
-		Host:           res.Value.Host,
-		SSHUser:        res.Value.SSHUser,
-		SSHKeyPath:     res.Value.SSHKeyPath,
-		WebhookURL:     res.Value.WebhookURL,
-		CreatedAt:      res.Value.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+	v := res.Value
+	writeJSON(w, http.StatusCreated, serviceResponse{
+		ID:             v.ID,
+		Name:           v.Name,
+		RepoURL:        v.RepoURL,
+		Domain:         v.Domain,
+		HealthCheckURL: v.HealthCheckURL,
+		Host:           v.Host,
+		SSHUser:        v.SSHUser,
+		SSHKeyPath:     v.SSHKeyPath,
+		WebhookURL:     h.webhookURL(v.ID),
+		CreatedAt:      v.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	})
 }
 
@@ -100,6 +114,43 @@ func (h *ServiceHandler) handleCreateError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, create.ErrNginxConfigFailed), errors.Is(err, create.ErrNginxReloadFailed):
 		writeError(w, http.StatusInternalServerError, "failed to configure routing")
+	default:
+		writeError(w, http.StatusInternalServerError, "internal server error")
+	}
+}
+
+// ── get ───────────────────────────────────────────────────
+
+func (h *ServiceHandler) Get(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+
+	res := h.deps.GetService.Execute(get.GetInput{ID: id})
+	if res.Err != nil {
+		h.handleGetError(w, res.Err)
+		return
+	}
+
+	v := res.Value
+	writeJSON(w, http.StatusOK, serviceResponse{
+		ID:             v.ID,
+		Name:           v.Name,
+		RepoURL:        v.RepoURL,
+		Domain:         v.Domain,
+		HealthCheckURL: v.HealthCheckURL,
+		Host:           v.Host,
+		SSHUser:        v.SSHUser,
+		SSHKeyPath:     v.SSHKeyPath,
+		WebhookURL:     h.webhookURL(v.ID),
+		CreatedAt:      v.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+	})
+}
+
+func (h *ServiceHandler) handleGetError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, get.ErrInvalidInput):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, get.ErrNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "internal server error")
 	}

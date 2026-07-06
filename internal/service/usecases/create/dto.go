@@ -22,6 +22,5 @@ type CreateOutput struct {
 	Host           string
 	SSHUser        string
 	SSHKeyPath     string
-	WebhookURL     string
 	CreatedAt      time.Time
 }

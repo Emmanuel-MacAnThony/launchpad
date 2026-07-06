@@ -90,9 +90,6 @@ func TestCreate_HappyPath(t *testing.T) {
 	if res.Value.CreatedAt.IsZero() {
 		t.Error("expected created_at to be set")
 	}
-	if res.Value.WebhookURL == "" {
-		t.Error("expected webhook_url to be populated")
-	}
 	if repo.saved == nil {
 		t.Error("expected service to be persisted")
 	}
