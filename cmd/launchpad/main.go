@@ -16,6 +16,8 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/infra"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/list"
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/update"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/logger"
 )
 
@@ -32,12 +34,16 @@ func main() {
 	repo := infra.NewPostgresServiceRepository(ctx, pool)
 	createSvc := create.New(repo, nil) // nginx client wired up once implemented
 	getSvc := get.New(repo)
+	updateSvc := update.New(repo)
+	listSvc := list.New(repo)
 
 	router := api.NewRouter(api.RouterDeps{
 		Service: api.NewServiceHandler(api.ServiceHandlerDeps{
 			BaseURL:       cfg.Server.BaseURL,
 			CreateService: createSvc,
 			GetService:    getSvc,
+			UpdateService: updateSvc,
+			ListServices:  listSvc,
 		}),
 	})
 
