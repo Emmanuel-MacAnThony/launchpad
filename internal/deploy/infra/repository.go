@@ -93,6 +93,18 @@ func (r *PostgresDeployRepository) EnqueueDeploy(serviceID, commitSHA, commitMes
 	return rowToDomain(row), queueResult, nil
 }
 
+func (r *PostgresDeployRepository) ListPending() ([]deploydomain.Deploy, error) {
+	rows, err := r.queries.ListPendingDeploys(r.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing pending deploys: %w", err)
+	}
+	deploys := make([]deploydomain.Deploy, len(rows))
+	for i, row := range rows {
+		deploys[i] = rowToDomain(row)
+	}
+	return deploys, nil
+}
+
 func rowToDomain(row Deploy) deploydomain.Deploy {
 	var slot *deploydomain.Slot
 	if row.Slot.Valid {

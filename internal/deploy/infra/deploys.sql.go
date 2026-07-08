@@ -78,6 +78,46 @@ func (q *Queries) InsertDeploy(ctx context.Context, arg InsertDeployParams) (Dep
 	return i, err
 }
 
+const listPendingDeploys = `-- name: ListPendingDeploys :many
+SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
+       rollback_of, started_at, finished_at, created_at
+FROM deploys
+WHERE status = 'pending'
+ORDER BY created_at ASC
+`
+
+func (q *Queries) ListPendingDeploys(ctx context.Context) ([]Deploy, error) {
+	rows, err := q.db.Query(ctx, listPendingDeploys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Deploy
+	for rows.Next() {
+		var i Deploy
+		if err := rows.Scan(
+			&i.ID,
+			&i.ServiceID,
+			&i.Slot,
+			&i.Status,
+			&i.CommitSha,
+			&i.CommitMessage,
+			&i.PushedAt,
+			&i.RollbackOf,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockServiceRow = `-- name: LockServiceRow :one
 SELECT id FROM services WHERE id = $1 FOR UPDATE
 `

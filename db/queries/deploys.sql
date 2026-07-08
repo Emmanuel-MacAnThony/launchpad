@@ -15,6 +15,13 @@ VALUES ($1, $2, $3, $4, $5, 'pending')
 RETURNING id, service_id, slot, status, commit_sha, commit_message, pushed_at,
           rollback_of, started_at, finished_at, created_at;
 
+-- name: ListPendingDeploys :many
+SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
+       rollback_of, started_at, finished_at, created_at
+FROM deploys
+WHERE status = 'pending'
+ORDER BY created_at ASC;
+
 -- name: UpgradePendingDeploy :one
 UPDATE deploys
 SET commit_sha = $2, commit_message = $3, pushed_at = $4
