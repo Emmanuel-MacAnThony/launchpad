@@ -1,6 +1,10 @@
 package create
 
-import "time"
+import (
+	"time"
+
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
+)
 
 type CreateInput struct {
 	Name           string
@@ -11,6 +15,9 @@ type CreateInput struct {
 	Host           string
 	SSHUser        string
 	SSHKeyPath     string
+	BluePort       int
+	GreenPort      int
+	ContainerPort  int
 }
 
 type CreateOutput struct {
@@ -22,5 +29,9 @@ type CreateOutput struct {
 	Host           string
 	SSHUser        string
 	SSHKeyPath     string
+	BluePort       int
+	GreenPort      int
+	ContainerPort  int
+	ActiveSlot     *domain.Slot // nil = never deployed
 	CreatedAt      time.Time
 }

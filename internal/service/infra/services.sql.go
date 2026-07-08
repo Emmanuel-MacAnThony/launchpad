@@ -34,14 +34,31 @@ func (q *Queries) ExistsByDomain(ctx context.Context, domain string) (bool, erro
 }
 
 const getService = `-- name: GetService :one
-SELECT id, name, repo_url, domain, health_check_url, webhook_secret, host, ssh_user, ssh_key_path, created_at
+SELECT id, name, repo_url, domain, health_check_url, webhook_secret, host, ssh_user, ssh_key_path, blue_port, green_port, container_port, active_slot, created_at
 FROM services
 WHERE id = $1
 `
 
-func (q *Queries) GetService(ctx context.Context, id string) (Service, error) {
+type GetServiceRow struct {
+	ID             string
+	Name           string
+	RepoUrl        string
+	Domain         string
+	HealthCheckUrl string
+	WebhookSecret  string
+	Host           string
+	SshUser        string
+	SshKeyPath     string
+	BluePort       int32
+	GreenPort      int32
+	ContainerPort  int32
+	ActiveSlot     pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) GetService(ctx context.Context, id string) (GetServiceRow, error) {
 	row := q.db.QueryRow(ctx, getService, id)
-	var i Service
+	var i GetServiceRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -52,26 +69,47 @@ func (q *Queries) GetService(ctx context.Context, id string) (Service, error) {
 		&i.Host,
 		&i.SshUser,
 		&i.SshKeyPath,
+		&i.BluePort,
+		&i.GreenPort,
+		&i.ContainerPort,
+		&i.ActiveSlot,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const listServices = `-- name: ListServices :many
-SELECT id, name, repo_url, domain, health_check_url, webhook_secret, host, ssh_user, ssh_key_path, created_at
+SELECT id, name, repo_url, domain, health_check_url, webhook_secret, host, ssh_user, ssh_key_path, blue_port, green_port, container_port, active_slot, created_at
 FROM services
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
+type ListServicesRow struct {
+	ID             string
+	Name           string
+	RepoUrl        string
+	Domain         string
+	HealthCheckUrl string
+	WebhookSecret  string
+	Host           string
+	SshUser        string
+	SshKeyPath     string
+	BluePort       int32
+	GreenPort      int32
+	ContainerPort  int32
+	ActiveSlot     pgtype.Text
+	CreatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) ListServices(ctx context.Context) ([]ListServicesRow, error) {
 	rows, err := q.db.Query(ctx, listServices)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Service
+	var items []ListServicesRow
 	for rows.Next() {
-		var i Service
+		var i ListServicesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -82,6 +120,10 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 			&i.Host,
 			&i.SshUser,
 			&i.SshKeyPath,
+			&i.BluePort,
+			&i.GreenPort,
+			&i.ContainerPort,
+			&i.ActiveSlot,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -95,8 +137,8 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 }
 
 const saveService = `-- name: SaveService :exec
-INSERT INTO services (id, name, repo_url, domain, health_check_url, webhook_secret, host, ssh_user, ssh_key_path, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO services (id, name, repo_url, domain, health_check_url, webhook_secret, host, ssh_user, ssh_key_path, blue_port, green_port, container_port, active_slot, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
 `
 
 type SaveServiceParams struct {
@@ -109,7 +151,10 @@ type SaveServiceParams struct {
 	Host           string
 	SshUser        string
 	SshKeyPath     string
-	CreatedAt      pgtype.Timestamptz
+	BluePort       int32
+	GreenPort      int32
+	ContainerPort  int32
+	ActiveSlot     pgtype.Text
 }
 
 func (q *Queries) SaveService(ctx context.Context, arg SaveServiceParams) error {
@@ -123,7 +168,10 @@ func (q *Queries) SaveService(ctx context.Context, arg SaveServiceParams) error 
 		arg.Host,
 		arg.SshUser,
 		arg.SshKeyPath,
-		arg.CreatedAt,
+		arg.BluePort,
+		arg.GreenPort,
+		arg.ContainerPort,
+		arg.ActiveSlot,
 	)
 	return err
 }

@@ -32,7 +32,7 @@ func main() {
 	defer pool.Close()
 
 	repo := infra.NewPostgresServiceRepository(ctx, pool)
-	createSvc := create.New(repo, nil) // nginx client wired up once implemented
+	createSvc := create.New(repo, nil, nil) // nginx and ssh wired up once implemented
 	getSvc := get.New(repo)
 	updateSvc := update.New(repo)
 	listSvc := list.New(repo)

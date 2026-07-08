@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,6 +22,11 @@ func NewPostgresServiceRepository(ctx context.Context, db *pgxpool.Pool) *Postgr
 }
 
 func (r *PostgresServiceRepository) Save(svc domain.Service) error {
+	var activeSlot pgtype.Text
+	if svc.ActiveSlot != nil {
+		activeSlot = pgtype.Text{String: string(*svc.ActiveSlot), Valid: true}
+	}
+
 	err := r.queries.SaveService(r.ctx, SaveServiceParams{
 		ID:             svc.ID,
 		Name:           svc.Name,
@@ -31,6 +37,10 @@ func (r *PostgresServiceRepository) Save(svc domain.Service) error {
 		Host:           svc.Host,
 		SshUser:        svc.SSHUser,
 		SshKeyPath:     svc.SSHKeyPath,
+		BluePort:       int32(svc.BluePort),
+		GreenPort:      int32(svc.GreenPort),
+		ContainerPort:  int32(svc.ContainerPort),
+		ActiveSlot:     activeSlot,
 	})
 	if err != nil {
 		return fmt.Errorf("saving service: %w", err)
@@ -58,7 +68,9 @@ func (r *PostgresServiceRepository) GetByID(id string) (domain.Service, error) {
 	if err != nil {
 		return domain.Service{}, fmt.Errorf("getting service: %w", err)
 	}
-	return toDomain(row), nil
+	return rowToDomain(row.ID, row.Name, row.RepoUrl, row.Domain, row.HealthCheckUrl,
+		row.WebhookSecret, row.Host, row.SshUser, row.SshKeyPath,
+		row.BluePort, row.GreenPort, row.ContainerPort, row.ActiveSlot, row.CreatedAt), nil
 }
 
 func (r *PostgresServiceRepository) ListAll() ([]domain.Service, error) {
@@ -68,7 +80,9 @@ func (r *PostgresServiceRepository) ListAll() ([]domain.Service, error) {
 	}
 	svcs := make([]domain.Service, len(rows))
 	for i, row := range rows {
-		svcs[i] = toDomain(row)
+		svcs[i] = rowToDomain(row.ID, row.Name, row.RepoUrl, row.Domain, row.HealthCheckUrl,
+			row.WebhookSecret, row.Host, row.SshUser, row.SshKeyPath,
+			row.BluePort, row.GreenPort, row.ContainerPort, row.ActiveSlot, row.CreatedAt)
 	}
 	return svcs, nil
 }
@@ -84,17 +98,32 @@ func (r *PostgresServiceRepository) Update(id, name, healthCheckURL string) erro
 	return nil
 }
 
-func toDomain(row Service) domain.Service {
+func rowToDomain(
+	id, name, repoURL, svcDomain, healthCheckURL, webhookSecret, host, sshUser, sshKeyPath string,
+	bluePort, greenPort, containerPort int32,
+	activeSlot pgtype.Text,
+	createdAt pgtype.Timestamptz,
+) domain.Service {
+	var slot *domain.Slot
+	if activeSlot.Valid {
+		s := domain.Slot(activeSlot.String)
+		slot = &s
+	}
+
 	return domain.Service{
-		ID:             row.ID,
-		Name:           row.Name,
-		RepoURL:        row.RepoUrl,
-		Domain:         row.Domain,
-		HealthCheckURL: row.HealthCheckUrl,
-		WebhookSecret:  row.WebhookSecret,
-		Host:           row.Host,
-		SSHUser:        row.SshUser,
-		SSHKeyPath:     row.SshKeyPath,
-		CreatedAt:      row.CreatedAt.Time,
+		ID:             id,
+		Name:           name,
+		RepoURL:        repoURL,
+		Domain:         svcDomain,
+		HealthCheckURL: healthCheckURL,
+		WebhookSecret:  webhookSecret,
+		Host:           host,
+		SSHUser:        sshUser,
+		SSHKeyPath:     sshKeyPath,
+		BluePort:       int(bluePort),
+		GreenPort:      int(greenPort),
+		ContainerPort:  int(containerPort),
+		ActiveSlot:     slot,
+		CreatedAt:      createdAt.Time,
 	}
 }

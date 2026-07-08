@@ -5,6 +5,8 @@ import "errors"
 var (
 	ErrInvalidInput      = errors.New("invalid input")
 	ErrDomainTaken       = errors.New("domain already taken")
+	ErrPortConflict      = errors.New("port already in use on host")
+	ErrPortScanFailed    = errors.New("failed to check ports on host")
 	ErrPersistFailed     = errors.New("failed to persist service")
 	ErrNginxConfigFailed = errors.New("failed to write nginx config")
 	ErrNginxReloadFailed = errors.New("failed to reload nginx")

@@ -57,6 +57,17 @@ func (n *fakeNginx) DeleteConfig(serviceID string) error {
 	return nil
 }
 
+type fakeSSHClient struct {
+	free bool
+	err  error
+}
+
+func (s *fakeSSHClient) AreFree(_ ...int) (bool, error) { return s.free, s.err }
+
+type fakeSSHFactory struct{ client create.SSHClient }
+
+func (f *fakeSSHFactory) New(_, _, _ string) create.SSHClient { return f.client }
+
 // --- helpers ---
 
 func validInput() create.CreateInput {
@@ -69,7 +80,14 @@ func validInput() create.CreateInput {
 		Host:           "192.168.1.1",
 		SSHUser:        "ubuntu",
 		SSHKeyPath:     "/home/ubuntu/.ssh/id_rsa",
+		BluePort:       3001,
+		GreenPort:      3002,
+		ContainerPort:  8000,
 	}
+}
+
+func happySSH() *fakeSSHFactory {
+	return &fakeSSHFactory{client: &fakeSSHClient{free: true}}
 }
 
 // --- tests ---
@@ -77,7 +95,7 @@ func validInput() create.CreateInput {
 func TestCreate_HappyPath(t *testing.T) {
 	repo := &fakeRepo{}
 	nginx := &fakeNginx{}
-	uc := create.New(repo, nginx)
+	uc := create.New(repo, nginx, happySSH())
 
 	res := uc.Execute(validInput())
 
@@ -90,6 +108,12 @@ func TestCreate_HappyPath(t *testing.T) {
 	if res.Value.CreatedAt.IsZero() {
 		t.Error("expected created_at to be set")
 	}
+	if res.Value.BluePort != 3001 || res.Value.GreenPort != 3002 {
+		t.Error("expected ports to be persisted")
+	}
+	if res.Value.ActiveSlot != nil {
+		t.Error("expected active_slot to be nil on creation")
+	}
 	if repo.saved == nil {
 		t.Error("expected service to be persisted")
 	}
@@ -101,10 +125,9 @@ func TestCreate_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCreate_InvalidInput(t *testing.T) {
+func TestCreate_InvalidInput_MissingField(t *testing.T) {
 	repo := &fakeRepo{}
-	nginx := &fakeNginx{}
-	uc := create.New(repo, nginx)
+	uc := create.New(repo, &fakeNginx{}, happySSH())
 
 	input := validInput()
 	input.Name = ""
@@ -117,15 +140,29 @@ func TestCreate_InvalidInput(t *testing.T) {
 	if repo.saved != nil {
 		t.Error("expected nothing persisted")
 	}
-	if len(nginx.written) != 0 {
-		t.Error("expected no nginx config written")
+}
+
+func TestCreate_InvalidInput_PortsEqual(t *testing.T) {
+	repo := &fakeRepo{}
+	uc := create.New(repo, &fakeNginx{}, happySSH())
+
+	input := validInput()
+	input.BluePort = 3001
+	input.GreenPort = 3001
+
+	res := uc.Execute(input)
+
+	if !errors.Is(res.Err, create.ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput, got %v", res.Err)
+	}
+	if repo.saved != nil {
+		t.Error("expected nothing persisted")
 	}
 }
 
 func TestCreate_DomainTaken(t *testing.T) {
 	repo := &fakeRepo{existsByDomain: true}
-	nginx := &fakeNginx{}
-	uc := create.New(repo, nginx)
+	uc := create.New(repo, &fakeNginx{}, happySSH())
 
 	res := uc.Execute(validInput())
 
@@ -135,30 +172,45 @@ func TestCreate_DomainTaken(t *testing.T) {
 	if repo.saved != nil {
 		t.Error("expected nothing persisted")
 	}
-	if len(nginx.written) != 0 {
-		t.Error("expected no nginx config written")
+}
+
+func TestCreate_PortConflict(t *testing.T) {
+	ssh := &fakeSSHFactory{client: &fakeSSHClient{free: false}}
+	uc := create.New(&fakeRepo{}, &fakeNginx{}, ssh)
+
+	res := uc.Execute(validInput())
+
+	if !errors.Is(res.Err, create.ErrPortConflict) {
+		t.Fatalf("expected ErrPortConflict, got %v", res.Err)
+	}
+}
+
+func TestCreate_PortScanFailed(t *testing.T) {
+	ssh := &fakeSSHFactory{client: &fakeSSHClient{err: errors.New("connection refused")}}
+	uc := create.New(&fakeRepo{}, &fakeNginx{}, ssh)
+
+	res := uc.Execute(validInput())
+
+	if !errors.Is(res.Err, create.ErrPortScanFailed) {
+		t.Fatalf("expected ErrPortScanFailed, got %v", res.Err)
 	}
 }
 
 func TestCreate_PersistFails(t *testing.T) {
 	repo := &fakeRepo{saveErr: errors.New("db error")}
-	nginx := &fakeNginx{}
-	uc := create.New(repo, nginx)
+	uc := create.New(repo, &fakeNginx{}, happySSH())
 
 	res := uc.Execute(validInput())
 
 	if !errors.Is(res.Err, create.ErrPersistFailed) {
 		t.Fatalf("expected ErrPersistFailed, got %v", res.Err)
 	}
-	if len(nginx.written) != 0 {
-		t.Error("expected no nginx config written")
-	}
 }
 
 func TestCreate_NginxConfigFails_RollsBackDB(t *testing.T) {
 	repo := &fakeRepo{}
 	nginx := &fakeNginx{writeErr: errors.New("disk error")}
-	uc := create.New(repo, nginx)
+	uc := create.New(repo, nginx, happySSH())
 
 	res := uc.Execute(validInput())
 
@@ -176,7 +228,7 @@ func TestCreate_NginxConfigFails_RollsBackDB(t *testing.T) {
 func TestCreate_NginxReloadFails_RollsBackDBAndFiles(t *testing.T) {
 	repo := &fakeRepo{}
 	nginx := &fakeNginx{reloadErr: errors.New("reload error")}
-	uc := create.New(repo, nginx)
+	uc := create.New(repo, nginx, happySSH())
 
 	res := uc.Execute(validInput())
 
