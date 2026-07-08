@@ -9,6 +9,11 @@ type Config struct {
 	DB     DBConfig
 	Server ServerConfig
 	Notify NotifyConfig
+	Crypto CryptoConfig
+}
+
+type CryptoConfig struct {
+	EncryptionKey string // hex-encoded 32-byte key
 }
 
 type DBConfig struct {
@@ -35,6 +40,9 @@ func Load() Config {
 		},
 		Notify: NotifyConfig{
 			SlackWebhookURL: env("SLACK_WEBHOOK_URL", ""),
+		},
+		Crypto: CryptoConfig{
+			EncryptionKey: mustEnv("ENCRYPTION_KEY"),
 		},
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/list"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/update"
+	"github.com/Emmanuel-MacAnThony/launchpad/pkg/crypto"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/logger"
 )
 
@@ -28,10 +30,21 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	keyBytes, err := hex.DecodeString(cfg.Crypto.EncryptionKey)
+	if err != nil {
+		log.Error("invalid ENCRYPTION_KEY: must be hex-encoded 32 bytes", "err", err)
+		os.Exit(1)
+	}
+	crypter, err := crypto.NewAESGCMCrypter(keyBytes)
+	if err != nil {
+		log.Error("failed to initialise crypter", "err", err)
+		os.Exit(1)
+	}
+
 	pool := appdb.Connect(ctx, cfg.DB.URL)
 	defer pool.Close()
 
-	repo := infra.NewPostgresServiceRepository(ctx, pool)
+	repo := infra.NewPostgresServiceRepository(ctx, pool, crypter)
 	createSvc := create.New(repo, nil, nil) // nginx and ssh wired up once implemented
 	getSvc := get.New(repo)
 	updateSvc := update.New(repo)
