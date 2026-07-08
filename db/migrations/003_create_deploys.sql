@@ -9,6 +9,7 @@ CREATE TABLE deploys (
                                CHECK (status IN ('pending', 'building', 'active', 'failed', 'rolled_back')),
     commit_sha     TEXT        NOT NULL,
     commit_message TEXT        NOT NULL DEFAULT '',
+    pushed_at      TIMESTAMPTZ NOT NULL,
     rollback_of    TEXT        DEFAULT NULL REFERENCES deploys(id),
     started_at     TIMESTAMPTZ DEFAULT NULL,
     finished_at    TIMESTAMPTZ DEFAULT NULL,
