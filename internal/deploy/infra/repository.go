@@ -112,11 +112,6 @@ func rowToDomain(row Deploy) deploydomain.Deploy {
 		slot = &s
 	}
 
-	var rollbackOf *string
-	if row.RollbackOf.Valid {
-		rollbackOf = &row.RollbackOf.String
-	}
-
 	var startedAt *time.Time
 	if row.StartedAt.Valid {
 		t := row.StartedAt.Time
@@ -137,7 +132,6 @@ func rowToDomain(row Deploy) deploydomain.Deploy {
 		CommitSHA:     row.CommitSha,
 		CommitMessage: row.CommitMessage,
 		PushedAt:      row.PushedAt.Time,
-		RollbackOf:    rollbackOf,
 		StartedAt:     startedAt,
 		FinishedAt:    finishedAt,
 		CreatedAt:     row.CreatedAt.Time,

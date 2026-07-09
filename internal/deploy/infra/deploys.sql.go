@@ -13,7 +13,7 @@ import (
 
 const getPendingDeploy = `-- name: GetPendingDeploy :one
 SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
-       rollback_of, started_at, finished_at, created_at
+       started_at, finished_at, created_at
 FROM deploys
 WHERE service_id = $1 AND status = 'pending'
 LIMIT 1
@@ -30,7 +30,6 @@ func (q *Queries) GetPendingDeploy(ctx context.Context, serviceID string) (Deplo
 		&i.CommitSha,
 		&i.CommitMessage,
 		&i.PushedAt,
-		&i.RollbackOf,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.CreatedAt,
@@ -42,7 +41,7 @@ const insertDeploy = `-- name: InsertDeploy :one
 INSERT INTO deploys (id, service_id, commit_sha, commit_message, pushed_at, status)
 VALUES ($1, $2, $3, $4, $5, 'pending')
 RETURNING id, service_id, slot, status, commit_sha, commit_message, pushed_at,
-          rollback_of, started_at, finished_at, created_at
+          started_at, finished_at, created_at
 `
 
 type InsertDeployParams struct {
@@ -70,7 +69,6 @@ func (q *Queries) InsertDeploy(ctx context.Context, arg InsertDeployParams) (Dep
 		&i.CommitSha,
 		&i.CommitMessage,
 		&i.PushedAt,
-		&i.RollbackOf,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.CreatedAt,
@@ -80,7 +78,7 @@ func (q *Queries) InsertDeploy(ctx context.Context, arg InsertDeployParams) (Dep
 
 const listPendingDeploys = `-- name: ListPendingDeploys :many
 SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
-       rollback_of, started_at, finished_at, created_at
+       started_at, finished_at, created_at
 FROM deploys
 WHERE status = 'pending'
 ORDER BY created_at ASC
@@ -103,7 +101,6 @@ func (q *Queries) ListPendingDeploys(ctx context.Context) ([]Deploy, error) {
 			&i.CommitSha,
 			&i.CommitMessage,
 			&i.PushedAt,
-			&i.RollbackOf,
 			&i.StartedAt,
 			&i.FinishedAt,
 			&i.CreatedAt,
@@ -135,7 +132,7 @@ UPDATE deploys
 SET commit_sha = $2, commit_message = $3, pushed_at = $4
 WHERE id = $1
 RETURNING id, service_id, slot, status, commit_sha, commit_message, pushed_at,
-          rollback_of, started_at, finished_at, created_at
+          started_at, finished_at, created_at
 `
 
 type UpgradePendingDeployParams struct {
@@ -161,7 +158,6 @@ func (q *Queries) UpgradePendingDeploy(ctx context.Context, arg UpgradePendingDe
 		&i.CommitSha,
 		&i.CommitMessage,
 		&i.PushedAt,
-		&i.RollbackOf,
 		&i.StartedAt,
 		&i.FinishedAt,
 		&i.CreatedAt,

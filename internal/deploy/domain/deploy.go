@@ -27,7 +27,6 @@ type Deploy struct {
 	CommitSHA     string
 	CommitMessage string
 	PushedAt      time.Time
-	RollbackOf    *string
 	StartedAt     *time.Time
 	FinishedAt    *time.Time
 	CreatedAt     time.Time

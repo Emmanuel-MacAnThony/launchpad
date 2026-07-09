@@ -10,7 +10,6 @@ CREATE TABLE deploys (
     commit_sha     TEXT        NOT NULL,
     commit_message TEXT        NOT NULL DEFAULT '',
     pushed_at      TIMESTAMPTZ NOT NULL,
-    rollback_of    TEXT        DEFAULT NULL REFERENCES deploys(id),
     started_at     TIMESTAMPTZ DEFAULT NULL,
     finished_at    TIMESTAMPTZ DEFAULT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
