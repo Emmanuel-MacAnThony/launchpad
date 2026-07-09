@@ -11,6 +11,44 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createDeployLock = `-- name: CreateDeployLock :exec
+INSERT INTO deploy_locks (deploy_id, expires_at) VALUES ($1, $2)
+`
+
+type CreateDeployLockParams struct {
+	DeployID  string
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreateDeployLock(ctx context.Context, arg CreateDeployLockParams) error {
+	_, err := q.db.Exec(ctx, createDeployLock, arg.DeployID, arg.ExpiresAt)
+	return err
+}
+
+const getDeployByID = `-- name: GetDeployByID :one
+SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
+       started_at, finished_at, created_at
+FROM deploys WHERE id = $1
+`
+
+func (q *Queries) GetDeployByID(ctx context.Context, id string) (Deploy, error) {
+	row := q.db.QueryRow(ctx, getDeployByID, id)
+	var i Deploy
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceID,
+		&i.Slot,
+		&i.Status,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.PushedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getPendingDeploy = `-- name: GetPendingDeploy :one
 SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
        started_at, finished_at, created_at
@@ -125,6 +163,43 @@ func (q *Queries) LockServiceRow(ctx context.Context, id string) (string, error)
 	var id_2 string
 	err := row.Scan(&id_2)
 	return id_2, err
+}
+
+const releaseDeployLock = `-- name: ReleaseDeployLock :exec
+UPDATE deploy_locks SET released_at = NOW() WHERE deploy_id = $1 AND released_at IS NULL
+`
+
+func (q *Queries) ReleaseDeployLock(ctx context.Context, deployID string) error {
+	_, err := q.db.Exec(ctx, releaseDeployLock, deployID)
+	return err
+}
+
+const setDeployBuilding = `-- name: SetDeployBuilding :exec
+UPDATE deploys SET status = 'building', slot = $2, started_at = NOW() WHERE id = $1
+`
+
+type SetDeployBuildingParams struct {
+	ID   string
+	Slot pgtype.Text
+}
+
+func (q *Queries) SetDeployBuilding(ctx context.Context, arg SetDeployBuildingParams) error {
+	_, err := q.db.Exec(ctx, setDeployBuilding, arg.ID, arg.Slot)
+	return err
+}
+
+const setDeployTerminal = `-- name: SetDeployTerminal :exec
+UPDATE deploys SET status = $2, finished_at = NOW() WHERE id = $1
+`
+
+type SetDeployTerminalParams struct {
+	ID     string
+	Status string
+}
+
+func (q *Queries) SetDeployTerminal(ctx context.Context, arg SetDeployTerminalParams) error {
+	_, err := q.db.Exec(ctx, setDeployTerminal, arg.ID, arg.Status)
+	return err
 }
 
 const upgradePendingDeploy = `-- name: UpgradePendingDeploy :one

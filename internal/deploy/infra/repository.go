@@ -105,6 +105,44 @@ func (r *PostgresDeployRepository) ListPending() ([]deploydomain.Deploy, error) 
 	return deploys, nil
 }
 
+func (r *PostgresDeployRepository) GetByID(deployID string) (deploydomain.Deploy, error) {
+	row, err := r.queries.GetDeployByID(r.ctx, deployID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return deploydomain.Deploy{}, deploydomain.ErrNotFound
+		}
+		return deploydomain.Deploy{}, fmt.Errorf("getting deploy: %w", err)
+	}
+	return rowToDomain(row), nil
+}
+
+func (r *PostgresDeployRepository) SetStatus(deployID string, newStatus deploydomain.DeployStatus, slot *deploydomain.Slot) error {
+	switch newStatus {
+	case deploydomain.StatusBuilding:
+		slotStr := pgtype.Text{String: string(*slot), Valid: true}
+		return r.queries.SetDeployBuilding(r.ctx, SetDeployBuildingParams{
+			ID:   deployID,
+			Slot: slotStr,
+		})
+	default:
+		return r.queries.SetDeployTerminal(r.ctx, SetDeployTerminalParams{
+			ID:     deployID,
+			Status: string(newStatus),
+		})
+	}
+}
+
+func (r *PostgresDeployRepository) CreateLock(deployID string, expiresAt time.Time) error {
+	return r.queries.CreateDeployLock(r.ctx, CreateDeployLockParams{
+		DeployID:  deployID,
+		ExpiresAt: pgtype.Timestamptz{Time: expiresAt.UTC(), Valid: true},
+	})
+}
+
+func (r *PostgresDeployRepository) ReleaseLock(deployID string) error {
+	return r.queries.ReleaseDeployLock(r.ctx, deployID)
+}
+
 func rowToDomain(row Deploy) deploydomain.Deploy {
 	var slot *deploydomain.Slot
 	if row.Slot.Valid {

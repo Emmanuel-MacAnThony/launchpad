@@ -14,6 +14,8 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/api"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/config"
 	appdb "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/db"
+	deployinfra "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/infra"
+	deploycreate "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/create"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/infra"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
@@ -50,6 +52,9 @@ func main() {
 	updateSvc := update.New(repo)
 	listSvc := list.New(repo)
 
+	deployRepo := deployinfra.NewPostgresDeployRepository(ctx, pool)
+	createDeploySvc := deploycreate.New(deployRepo)
+
 	router := api.NewRouter(api.RouterDeps{
 		Service: api.NewServiceHandler(api.ServiceHandlerDeps{
 			BaseURL:       cfg.Server.BaseURL,
@@ -57,6 +62,10 @@ func main() {
 			GetService:    getSvc,
 			UpdateService: updateSvc,
 			ListServices:  listSvc,
+		}),
+		Webhook: api.NewWebhookHandler(api.WebhookHandlerDeps{
+			GetService:   getSvc,
+			CreateDeploy: createDeploySvc,
 		}),
 	})
 

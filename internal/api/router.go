@@ -4,11 +4,13 @@ import "net/http"
 
 type RouterDeps struct {
 	Service *ServiceHandler
+	Webhook *WebhookHandler
 }
 
 func NewRouter(deps RouterDeps) http.Handler {
 	mux := http.NewServeMux()
 	deps.Service.RegisterRoutes(mux)
+	deps.Webhook.RegisterRoutes(mux)
 	return withCORS(mux)
 }
 

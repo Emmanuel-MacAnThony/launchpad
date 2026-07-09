@@ -15,5 +15,6 @@ type GetOutput struct {
 	Host           string
 	SSHUser        string
 	SSHKeyPath     string
+	WebhookSecret  string // decrypted; server-side only — never expose in HTTP responses
 	CreatedAt      time.Time
 }

@@ -42,6 +42,7 @@ func (uc *UseCase) Execute(input GetInput) result.Result[GetOutput] {
 		Host:           svc.Host,
 		SSHUser:        svc.SSHUser,
 		SSHKeyPath:     svc.SSHKeyPath,
+		WebhookSecret:  svc.WebhookSecret,
 		CreatedAt:      svc.CreatedAt,
 	})
 }
