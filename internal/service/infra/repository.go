@@ -99,6 +99,16 @@ func (r *PostgresServiceRepository) ListAll() ([]domain.Service, error) {
 	return svcs, nil
 }
 
+func (r *PostgresServiceRepository) UpdateActiveSlot(serviceID string, slot domain.Slot) error {
+	if err := r.queries.UpdateServiceActiveSlot(r.ctx, UpdateServiceActiveSlotParams{
+		ID:         serviceID,
+		ActiveSlot: pgtype.Text{String: string(slot), Valid: true},
+	}); err != nil {
+		return fmt.Errorf("updating active slot: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresServiceRepository) Update(id, name, healthCheckURL string) error {
 	if err := r.queries.UpdateService(r.ctx, UpdateServiceParams{
 		ID:             id,

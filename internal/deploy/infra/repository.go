@@ -143,6 +143,31 @@ func (r *PostgresDeployRepository) ReleaseLock(deployID string) error {
 	return r.queries.ReleaseDeployLock(r.ctx, deployID)
 }
 
+func (r *PostgresDeployRepository) GetActiveForService(serviceID string) (deploydomain.Deploy, error) {
+	row, err := r.queries.GetActiveDeployForService(r.ctx, serviceID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return deploydomain.Deploy{}, deploydomain.ErrNotFound
+		}
+		return deploydomain.Deploy{}, fmt.Errorf("getting active deploy: %w", err)
+	}
+	return rowToDomain(row), nil
+}
+
+func (r *PostgresDeployRepository) GetLatestOnSlot(serviceID string, slot deploydomain.Slot) (deploydomain.Deploy, error) {
+	row, err := r.queries.GetLatestDeployOnSlot(r.ctx, GetLatestDeployOnSlotParams{
+		ServiceID: serviceID,
+		Slot:      pgtype.Text{String: string(slot), Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return deploydomain.Deploy{}, deploydomain.ErrNotFound
+		}
+		return deploydomain.Deploy{}, fmt.Errorf("getting latest deploy on slot: %w", err)
+	}
+	return rowToDomain(row), nil
+}
+
 func (r *PostgresDeployRepository) List(serviceID string) ([]deploydomain.Deploy, error) {
 	rows, err := r.queries.ListDeploysByService(r.ctx, serviceID)
 	if err != nil {

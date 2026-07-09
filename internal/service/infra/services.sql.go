@@ -192,3 +192,17 @@ func (q *Queries) UpdateService(ctx context.Context, arg UpdateServiceParams) er
 	_, err := q.db.Exec(ctx, updateService, arg.ID, arg.Name, arg.HealthCheckUrl)
 	return err
 }
+
+const updateServiceActiveSlot = `-- name: UpdateServiceActiveSlot :exec
+UPDATE services SET active_slot = $2 WHERE id = $1
+`
+
+type UpdateServiceActiveSlotParams struct {
+	ID         string
+	ActiveSlot pgtype.Text
+}
+
+func (q *Queries) UpdateServiceActiveSlot(ctx context.Context, arg UpdateServiceActiveSlotParams) error {
+	_, err := q.db.Exec(ctx, updateServiceActiveSlot, arg.ID, arg.ActiveSlot)
+	return err
+}

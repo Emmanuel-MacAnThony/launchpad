@@ -25,9 +25,10 @@ type Nginx interface {
 }
 
 type NginxConfig struct {
-	Domain string
-	Host   string
-	Port   int
+	Domain    string
+	Host      string
+	BluePort  int
+	GreenPort int
 }
 
 // SSHClient checks port availability on a remote host.
@@ -85,7 +86,7 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrPersistFailed, err))
 	}
 
-	if err := uc.nginx.WriteConfig(svc.ID, withDomain(svc.Domain), withHost(svc.Host)); err != nil {
+	if err := uc.nginx.WriteConfig(svc.ID, withDomain(svc.Domain), withHost(svc.Host), withBluePort(svc.BluePort), withGreenPort(svc.GreenPort)); err != nil {
 		uc.repo.Delete(svc.ID)
 		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrNginxConfigFailed, err))
 	}
@@ -152,4 +153,12 @@ func withDomain(d string) func(*NginxConfig) {
 
 func withHost(h string) func(*NginxConfig) {
 	return func(c *NginxConfig) { c.Host = h }
+}
+
+func withBluePort(p int) func(*NginxConfig) {
+	return func(c *NginxConfig) { c.BluePort = p }
+}
+
+func withGreenPort(p int) func(*NginxConfig) {
+	return func(c *NginxConfig) { c.GreenPort = p }
 }

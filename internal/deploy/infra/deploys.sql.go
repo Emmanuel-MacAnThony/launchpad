@@ -25,6 +25,32 @@ func (q *Queries) CreateDeployLock(ctx context.Context, arg CreateDeployLockPara
 	return err
 }
 
+const getActiveDeployForService = `-- name: GetActiveDeployForService :one
+SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
+       started_at, finished_at, created_at
+FROM deploys
+WHERE service_id = $1 AND status = 'active'
+LIMIT 1
+`
+
+func (q *Queries) GetActiveDeployForService(ctx context.Context, serviceID string) (Deploy, error) {
+	row := q.db.QueryRow(ctx, getActiveDeployForService, serviceID)
+	var i Deploy
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceID,
+		&i.Slot,
+		&i.Status,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.PushedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getDeployByID = `-- name: GetDeployByID :one
 SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
        started_at, finished_at, created_at
@@ -33,6 +59,38 @@ FROM deploys WHERE id = $1
 
 func (q *Queries) GetDeployByID(ctx context.Context, id string) (Deploy, error) {
 	row := q.db.QueryRow(ctx, getDeployByID, id)
+	var i Deploy
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceID,
+		&i.Slot,
+		&i.Status,
+		&i.CommitSha,
+		&i.CommitMessage,
+		&i.PushedAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getLatestDeployOnSlot = `-- name: GetLatestDeployOnSlot :one
+SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
+       started_at, finished_at, created_at
+FROM deploys
+WHERE service_id = $1 AND slot = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestDeployOnSlotParams struct {
+	ServiceID string
+	Slot      pgtype.Text
+}
+
+func (q *Queries) GetLatestDeployOnSlot(ctx context.Context, arg GetLatestDeployOnSlotParams) (Deploy, error) {
+	row := q.db.QueryRow(ctx, getLatestDeployOnSlot, arg.ServiceID, arg.Slot)
 	var i Deploy
 	err := row.Scan(
 		&i.ID,

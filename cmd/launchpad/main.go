@@ -18,6 +18,7 @@ import (
 	deploycreate "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/create"
 	deployget "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/getdeploy"
 	deploylist "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/listdeploys"
+	deployrollback "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/rollback"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/infra"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
@@ -58,6 +59,7 @@ func main() {
 	createDeploySvc := deploycreate.New(deployRepo)
 	getDeploySvc := deployget.New(deployRepo)
 	listDeploysSvc := deploylist.New(deployRepo)
+	rollbackSvc := deployrollback.New(repo, deployRepo, nil) // nginx wired up once implemented
 
 	router := api.NewRouter(api.RouterDeps{
 		Service: api.NewServiceHandler(api.ServiceHandlerDeps{
@@ -74,6 +76,7 @@ func main() {
 		Deploy: api.NewDeployHandler(api.DeployHandlerDeps{
 			GetDeploy:   getDeploySvc,
 			ListDeploys: listDeploysSvc,
+			Rollback:    rollbackSvc,
 		}),
 	})
 

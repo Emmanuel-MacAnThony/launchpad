@@ -24,3 +24,6 @@ DELETE FROM services WHERE id = $1;
 UPDATE services
 SET name = $2, health_check_url = $3
 WHERE id = $1;
+
+-- name: UpdateServiceActiveSlot :exec
+UPDATE services SET active_slot = $2 WHERE id = $1;
