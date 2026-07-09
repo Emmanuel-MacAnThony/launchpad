@@ -143,6 +143,18 @@ func (r *PostgresDeployRepository) ReleaseLock(deployID string) error {
 	return r.queries.ReleaseDeployLock(r.ctx, deployID)
 }
 
+func (r *PostgresDeployRepository) List(serviceID string) ([]deploydomain.Deploy, error) {
+	rows, err := r.queries.ListDeploysByService(r.ctx, serviceID)
+	if err != nil {
+		return nil, fmt.Errorf("listing deploys: %w", err)
+	}
+	deploys := make([]deploydomain.Deploy, len(rows))
+	for i, row := range rows {
+		deploys[i] = rowToDomain(row)
+	}
+	return deploys, nil
+}
+
 func (r *PostgresDeployRepository) RefreshLock(deployID string, newExpiresAt time.Time) error {
 	return r.queries.RefreshDeployLock(r.ctx, RefreshDeployLockParams{
 		DeployID:  deployID,

@@ -39,6 +39,13 @@ FROM deploys
 WHERE status = 'pending'
 ORDER BY created_at ASC;
 
+-- name: ListDeploysByService :many
+SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
+       started_at, finished_at, created_at
+FROM deploys
+WHERE service_id = $1
+ORDER BY created_at DESC;
+
 -- name: RefreshDeployLock :exec
 UPDATE deploy_locks SET expires_at = $2 WHERE deploy_id = $1 AND released_at IS NULL;
 
