@@ -39,6 +39,9 @@ FROM deploys
 WHERE status = 'pending'
 ORDER BY created_at ASC;
 
+-- name: RefreshDeployLock :exec
+UPDATE deploy_locks SET expires_at = $2 WHERE deploy_id = $1 AND released_at IS NULL;
+
 -- name: UpgradePendingDeploy :one
 UPDATE deploys
 SET commit_sha = $2, commit_message = $3, pushed_at = $4

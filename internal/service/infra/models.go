@@ -16,7 +16,6 @@ type Deploy struct {
 	CommitSha     string
 	CommitMessage string
 	PushedAt      pgtype.Timestamptz
-	RollbackOf    pgtype.Text
 	StartedAt     pgtype.Timestamptz
 	FinishedAt    pgtype.Timestamptz
 	CreatedAt     pgtype.Timestamptz

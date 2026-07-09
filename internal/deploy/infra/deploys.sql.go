@@ -165,6 +165,20 @@ func (q *Queries) LockServiceRow(ctx context.Context, id string) (string, error)
 	return id_2, err
 }
 
+const refreshDeployLock = `-- name: RefreshDeployLock :exec
+UPDATE deploy_locks SET expires_at = $2 WHERE deploy_id = $1 AND released_at IS NULL
+`
+
+type RefreshDeployLockParams struct {
+	DeployID  string
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) RefreshDeployLock(ctx context.Context, arg RefreshDeployLockParams) error {
+	_, err := q.db.Exec(ctx, refreshDeployLock, arg.DeployID, arg.ExpiresAt)
+	return err
+}
+
 const releaseDeployLock = `-- name: ReleaseDeployLock :exec
 UPDATE deploy_locks SET released_at = NOW() WHERE deploy_id = $1 AND released_at IS NULL
 `

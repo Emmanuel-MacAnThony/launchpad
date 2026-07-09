@@ -143,6 +143,13 @@ func (r *PostgresDeployRepository) ReleaseLock(deployID string) error {
 	return r.queries.ReleaseDeployLock(r.ctx, deployID)
 }
 
+func (r *PostgresDeployRepository) RefreshLock(deployID string, newExpiresAt time.Time) error {
+	return r.queries.RefreshDeployLock(r.ctx, RefreshDeployLockParams{
+		DeployID:  deployID,
+		ExpiresAt: pgtype.Timestamptz{Time: newExpiresAt.UTC(), Valid: true},
+	})
+}
+
 func rowToDomain(row Deploy) deploydomain.Deploy {
 	var slot *deploydomain.Slot
 	if row.Slot.Valid {
