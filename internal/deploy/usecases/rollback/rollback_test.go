@@ -50,15 +50,22 @@ func (r *stubDeployRepo) SetStatus(deployID string, newStatus deploydomain.Deplo
 }
 
 type stubNginxClient struct {
-	err    error
-	called bool
-	slot   deploydomain.Slot
+	switchErr    error
+	reloadErr    error
+	switchCalled bool
+	reloadCalled bool
+	slot         deploydomain.Slot
 }
 
-func (n *stubNginxClient) Switch(host, domain string, slot deploydomain.Slot) error {
-	n.called = true
+func (n *stubNginxClient) Switch(serviceID string, slot deploydomain.Slot) error {
+	n.switchCalled = true
 	n.slot = slot
-	return n.err
+	return n.switchErr
+}
+
+func (n *stubNginxClient) ReloadNginx() error {
+	n.reloadCalled = true
+	return n.reloadErr
 }
 
 // --- fixtures ---
@@ -200,7 +207,22 @@ func TestRollback_NginxFailed(t *testing.T) {
 	uc := rollback.New(
 		&stubServiceRepo{service: activeService},
 		&stubDeployRepo{activeDeploy: activeDeploy, latestDeploy: previousDeploy},
-		&stubNginxClient{err: errors.New("nginx error")},
+		&stubNginxClient{switchErr: errors.New("nginx error")},
+	)
+	res := uc.Execute(rollback.RollbackInput{ServiceID: "svc-1"})
+	if res.IsOk() {
+		t.Fatal("expected error, got ok")
+	}
+	if !errors.Is(res.Err, rollback.ErrNginxFailed) {
+		t.Fatalf("expected ErrNginxFailed, got %v", res.Err)
+	}
+}
+
+func TestRollback_ReloadFailed(t *testing.T) {
+	uc := rollback.New(
+		&stubServiceRepo{service: activeService},
+		&stubDeployRepo{activeDeploy: activeDeploy, latestDeploy: previousDeploy},
+		&stubNginxClient{reloadErr: errors.New("reload error")},
 	)
 	res := uc.Execute(rollback.RollbackInput{ServiceID: "svc-1"})
 	if res.IsOk() {
@@ -253,7 +275,7 @@ func TestRollback_Success(t *testing.T) {
 	}
 
 	// nginx switched to inactive slot (green, since active was blue)
-	if !nginx.called {
+	if !nginx.switchCalled {
 		t.Fatal("expected nginx.Switch to be called")
 	}
 	if nginx.slot != deploydomain.SlotGreen {

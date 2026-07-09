@@ -20,7 +20,8 @@ type DeployRepo interface {
 }
 
 type NginxClient interface {
-	Switch(host, domain string, slot deploydomain.Slot) error
+	Switch(serviceID string, slot deploydomain.Slot) error
+	ReloadNginx() error
 }
 
 type RollbackInput struct {
@@ -72,7 +73,11 @@ func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
 		return result.Fail[struct{}](ErrInternal)
 	}
 
-	if err := uc.nginx.Switch(svc.Host, svc.Domain, inactiveSlot); err != nil {
+	if err := uc.nginx.Switch(input.ServiceID, inactiveSlot); err != nil {
+		return result.Fail[struct{}](ErrNginxFailed)
+	}
+
+	if err := uc.nginx.ReloadNginx(); err != nil {
 		return result.Fail[struct{}](ErrNginxFailed)
 	}
 
