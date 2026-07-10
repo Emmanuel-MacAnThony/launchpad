@@ -46,6 +46,15 @@ func (r *PostgresDeployRepository) EnqueueDeploy(serviceID, commitSHA, commitMes
 		return deploydomain.Deploy{}, "", fmt.Errorf("locking service row: %w", err)
 	}
 
+	// Discard if a newer push is already pending, building, or active.
+	latest, err := qtx.GetLatestPushedAt(r.ctx, serviceID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return deploydomain.Deploy{}, "", fmt.Errorf("getting latest pushed_at: %w", err)
+	}
+	if err == nil && !pushedAt.After(latest.Time) {
+		return deploydomain.Deploy{}, create.PushDiscarded, nil
+	}
+
 	pending, err := qtx.GetPendingDeploy(r.ctx, serviceID)
 
 	var row Deploy
@@ -68,7 +77,8 @@ func (r *PostgresDeployRepository) EnqueueDeploy(serviceID, commitSHA, commitMes
 	case err != nil:
 		return deploydomain.Deploy{}, "", fmt.Errorf("getting pending deploy: %w", err)
 
-	case pushedAt.After(pending.PushedAt.Time):
+	default:
+		// Incoming push is newer (guaranteed by GetLatestPushedAt check above) — upgrade the pending row.
 		row, err = qtx.UpgradePendingDeploy(r.ctx, UpgradePendingDeployParams{
 			ID:            pending.ID,
 			CommitSha:     commitSHA,
@@ -79,11 +89,6 @@ func (r *PostgresDeployRepository) EnqueueDeploy(serviceID, commitSHA, commitMes
 			return deploydomain.Deploy{}, "", fmt.Errorf("upgrading pending deploy: %w", err)
 		}
 		queueResult = create.PendingPromoted
-
-	default:
-		// Incoming push is stale — the queue already holds a newer commit.
-		// No writes needed; let the deferred rollback release the lock.
-		return rowToDomain(pending), create.PushDiscarded, nil
 	}
 
 	if err := tx.Commit(r.ctx); err != nil {

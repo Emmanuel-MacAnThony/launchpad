@@ -64,6 +64,13 @@ LIMIT 1;
 -- name: RefreshDeployLock :exec
 UPDATE deploy_locks SET expires_at = $2 WHERE deploy_id = $1 AND released_at IS NULL;
 
+-- name: GetLatestPushedAt :one
+SELECT pushed_at FROM deploys
+WHERE service_id = $1
+  AND status IN ('pending', 'building', 'active')
+ORDER BY pushed_at DESC
+LIMIT 1;
+
 -- name: UpgradePendingDeploy :one
 UPDATE deploys
 SET commit_sha = $2, commit_message = $3, pushed_at = $4

@@ -107,6 +107,21 @@ func (q *Queries) GetLatestDeployOnSlot(ctx context.Context, arg GetLatestDeploy
 	return i, err
 }
 
+const getLatestPushedAt = `-- name: GetLatestPushedAt :one
+SELECT pushed_at FROM deploys
+WHERE service_id = $1
+  AND status IN ('pending', 'building', 'active')
+ORDER BY pushed_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestPushedAt(ctx context.Context, serviceID string) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getLatestPushedAt, serviceID)
+	var pushed_at pgtype.Timestamptz
+	err := row.Scan(&pushed_at)
+	return pushed_at, err
+}
+
 const getPendingDeploy = `-- name: GetPendingDeploy :one
 SELECT id, service_id, slot, status, commit_sha, commit_message, pushed_at,
        started_at, finished_at, created_at
