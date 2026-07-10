@@ -8,6 +8,7 @@ package infra
 import (
 	"context"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -300,6 +301,26 @@ func (q *Queries) ReleaseDeployLock(ctx context.Context, deployID string) error 
 	return err
 }
 
+const resetExpiredBuilding = `-- name: ResetExpiredBuilding :execresult
+WITH expired AS (
+    SELECT deploy_id FROM deploy_locks
+    WHERE expires_at < NOW() AND released_at IS NULL
+),
+release AS (
+    UPDATE deploy_locks SET released_at = NOW()
+    WHERE deploy_id IN (SELECT deploy_id FROM expired)
+    RETURNING deploy_id
+)
+UPDATE deploys SET status = 'pending', slot = NULL, started_at = NULL
+WHERE id IN (SELECT deploy_id FROM release)
+  AND status = 'building'
+`
+
+// Atomically release expired locks and reset their deploys to pending.
+func (q *Queries) ResetExpiredBuilding(ctx context.Context) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, resetExpiredBuilding)
+}
+
 const setDeployBuilding = `-- name: SetDeployBuilding :exec
 UPDATE deploys SET status = 'building', slot = $2, started_at = NOW() WHERE id = $1
 `
@@ -326,6 +347,27 @@ type SetDeployTerminalParams struct {
 func (q *Queries) SetDeployTerminal(ctx context.Context, arg SetDeployTerminalParams) error {
 	_, err := q.db.Exec(ctx, setDeployTerminal, arg.ID, arg.Status)
 	return err
+}
+
+const startupRecoveryReleaseLocks = `-- name: StartupRecoveryReleaseLocks :exec
+UPDATE deploy_locks SET released_at = NOW()
+WHERE deploy_id IN (SELECT id FROM deploys WHERE status = 'building')
+  AND released_at IS NULL
+`
+
+// Release locks held by any building deploy (process crashed; all building are stale).
+func (q *Queries) StartupRecoveryReleaseLocks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, startupRecoveryReleaseLocks)
+	return err
+}
+
+const startupRecoveryResetBuilding = `-- name: StartupRecoveryResetBuilding :execresult
+UPDATE deploys SET status = 'pending', slot = NULL, started_at = NULL
+WHERE status = 'building'
+`
+
+func (q *Queries) StartupRecoveryResetBuilding(ctx context.Context) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, startupRecoveryResetBuilding)
 }
 
 const upgradePendingDeploy = `-- name: UpgradePendingDeploy :one

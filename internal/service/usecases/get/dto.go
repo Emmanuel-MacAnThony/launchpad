@@ -1,6 +1,10 @@
 package get
 
-import "time"
+import (
+	"time"
+
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
+)
 
 type GetInput struct {
 	ID string
@@ -16,5 +20,9 @@ type GetOutput struct {
 	SSHUser        string
 	SSHKeyPath     string
 	WebhookSecret  string // decrypted; server-side only — never expose in HTTP responses
+	BluePort       int
+	GreenPort      int
+	ContainerPort  int
+	ActiveSlot     *domain.Slot
 	CreatedAt      time.Time
 }

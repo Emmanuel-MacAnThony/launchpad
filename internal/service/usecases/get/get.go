@@ -43,6 +43,10 @@ func (uc *UseCase) Execute(input GetInput) result.Result[GetOutput] {
 		SSHUser:        svc.SSHUser,
 		SSHKeyPath:     svc.SSHKeyPath,
 		WebhookSecret:  svc.WebhookSecret,
+		BluePort:       svc.BluePort,
+		GreenPort:      svc.GreenPort,
+		ContainerPort:  svc.ContainerPort,
+		ActiveSlot:     svc.ActiveSlot,
 		CreatedAt:      svc.CreatedAt,
 	})
 }

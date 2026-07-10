@@ -185,6 +185,25 @@ func (r *PostgresDeployRepository) List(serviceID string) ([]deploydomain.Deploy
 	return deploys, nil
 }
 
+func (r *PostgresDeployRepository) StartupRecovery() (int64, error) {
+	if err := r.queries.StartupRecoveryReleaseLocks(r.ctx); err != nil {
+		return 0, fmt.Errorf("releasing stale locks: %w", err)
+	}
+	tag, err := r.queries.StartupRecoveryResetBuilding(r.ctx)
+	if err != nil {
+		return 0, fmt.Errorf("resetting building deploys: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *PostgresDeployRepository) ResetExpiredBuilding() (int64, error) {
+	tag, err := r.queries.ResetExpiredBuilding(r.ctx)
+	if err != nil {
+		return 0, fmt.Errorf("resetting expired building deploys: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (r *PostgresDeployRepository) RefreshLock(deployID string, newExpiresAt time.Time) error {
 	return r.queries.RefreshDeployLock(r.ctx, RefreshDeployLockParams{
 		DeployID:  deployID,

@@ -71,6 +71,31 @@ WHERE service_id = $1
 ORDER BY pushed_at DESC
 LIMIT 1;
 
+-- name: StartupRecoveryReleaseLocks :exec
+-- Release locks held by any building deploy (process crashed; all building are stale).
+UPDATE deploy_locks SET released_at = NOW()
+WHERE deploy_id IN (SELECT id FROM deploys WHERE status = 'building')
+  AND released_at IS NULL;
+
+-- name: StartupRecoveryResetBuilding :execresult
+UPDATE deploys SET status = 'pending', slot = NULL, started_at = NULL
+WHERE status = 'building';
+
+-- name: ResetExpiredBuilding :execresult
+-- Atomically release expired locks and reset their deploys to pending.
+WITH expired AS (
+    SELECT deploy_id FROM deploy_locks
+    WHERE expires_at < NOW() AND released_at IS NULL
+),
+release AS (
+    UPDATE deploy_locks SET released_at = NOW()
+    WHERE deploy_id IN (SELECT deploy_id FROM expired)
+    RETURNING deploy_id
+)
+UPDATE deploys SET status = 'pending', slot = NULL, started_at = NULL
+WHERE id IN (SELECT deploy_id FROM release)
+  AND status = 'building';
+
 -- name: UpgradePendingDeploy :one
 UPDATE deploys
 SET commit_sha = $2, commit_message = $3, pushed_at = $4
