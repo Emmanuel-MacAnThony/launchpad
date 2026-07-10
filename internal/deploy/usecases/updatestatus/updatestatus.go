@@ -40,8 +40,12 @@ var knownStatuses = map[deploydomain.DeployStatus]bool{
 }
 
 var validTransitions = map[deploydomain.DeployStatus]map[deploydomain.DeployStatus]bool{
+	// building → active is intentionally absent here. The activate use case owns
+	// that transition — it coordinates nginx switch, slot update, status change,
+	// and lock release as one operation. Allowing it here would create two paths
+	// to the same terminal state with different side effects.
 	deploydomain.StatusPending:  {deploydomain.StatusBuilding: true},
-	deploydomain.StatusBuilding: {deploydomain.StatusActive: true, deploydomain.StatusFailed: true},
+	deploydomain.StatusBuilding: {deploydomain.StatusFailed: true},
 	deploydomain.StatusActive:   {deploydomain.StatusRolledBack: true},
 }
 
@@ -83,7 +87,7 @@ func (uc *UseCase) Execute(input UpdateStatusInput) result.Result[UpdateStatusOu
 			return result.Fail[UpdateStatusOutput](ErrInternal)
 		}
 
-	case deploydomain.StatusActive, deploydomain.StatusFailed:
+	case deploydomain.StatusFailed:
 		deploy.FinishedAt = &now
 		if err := uc.lockRepo.ReleaseLock(input.DeployID); err != nil {
 			return result.Fail[UpdateStatusOutput](ErrInternal)
@@ -91,7 +95,7 @@ func (uc *UseCase) Execute(input UpdateStatusInput) result.Result[UpdateStatusOu
 
 	case deploydomain.StatusRolledBack:
 		deploy.FinishedAt = &now
-		// no lock to release — deploy was active, never held a build lock
+		// no lock to release — active deploys never hold a build lock
 	}
 
 	return result.Ok(UpdateStatusOutput{Deploy: deploy})

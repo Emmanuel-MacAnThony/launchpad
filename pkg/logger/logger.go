@@ -32,3 +32,7 @@ func (l *Logger) Warn(msg string, args ...any) {
 func (l *Logger) Debug(msg string, args ...any) {
 	l.log.Debug(msg, args...)
 }
+
+func (l *Logger) With(args ...any) *Logger {
+	return &Logger{log: l.log.With(args...)}
+}

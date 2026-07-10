@@ -169,28 +169,6 @@ func TestUpdateStatus_PendingToBuilding(t *testing.T) {
 	}
 }
 
-func TestUpdateStatus_BuildingToActive(t *testing.T) {
-	deployRepo := &stubDeployRepo{deploy: buildingDep}
-	lockRepo := &stubLockRepo{}
-	uc := updatestatus.New(deployRepo, lockRepo)
-
-	res := uc.Execute(updatestatus.UpdateStatusInput{DeployID: "dep-1", NewStatus: deploydomain.StatusActive})
-	if !res.IsOk() {
-		t.Fatalf("expected ok, got %v", res.Err)
-	}
-	if deployRepo.setStatus != deploydomain.StatusActive {
-		t.Fatalf("expected SetStatus active, got %v", deployRepo.setStatus)
-	}
-	if !lockRepo.releaseCalled {
-		t.Fatal("expected ReleaseLock to be called")
-	}
-	if lockRepo.createCalled {
-		t.Fatal("expected CreateLock NOT to be called")
-	}
-	if res.Value.Deploy.FinishedAt == nil {
-		t.Fatal("expected FinishedAt to be set")
-	}
-}
 
 func TestUpdateStatus_BuildingToFailed(t *testing.T) {
 	deployRepo := &stubDeployRepo{deploy: buildingDep}
@@ -268,7 +246,7 @@ func TestUpdateStatus_CreateLockError(t *testing.T) {
 func TestUpdateStatus_ReleaseLockError(t *testing.T) {
 	uc := updatestatus.New(&stubDeployRepo{deploy: buildingDep}, &stubLockRepo{releaseErr: errors.New("release failed")})
 
-	res := uc.Execute(updatestatus.UpdateStatusInput{DeployID: "dep-1", NewStatus: deploydomain.StatusActive})
+	res := uc.Execute(updatestatus.UpdateStatusInput{DeployID: "dep-1", NewStatus: deploydomain.StatusFailed})
 	if res.IsOk() {
 		t.Fatal("expected error, got ok")
 	}

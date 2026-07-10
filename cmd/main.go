@@ -11,21 +11,28 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/agent"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/api"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/config"
-	appdb "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/db"
-	sharednginx "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
-	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 	deployinfra "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/infra"
+	deployactivate "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/activate"
 	deploycreate "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/create"
 	deployget "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/getdeploy"
 	deploylist "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/listdeploys"
+	getpending "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/getpending"
+	recoverybuild "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/recoverybuild"
 	deployrollback "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/rollback"
+	refreshlock "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/refreshlock"
+	startuprecovery "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/startuprecovery"
+	updatestatus "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/updatestatus"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/infra"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/list"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/update"
+	appdb "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/db"
+	sharednginx "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
+	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/crypto"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/logger"
 )
@@ -76,6 +83,19 @@ func main() {
 	getDeploySvc := deployget.New(deployRepo)
 	listDeploysSvc := deploylist.New(deployRepo)
 	rollbackSvc := deployrollback.New(repo, deployRepo, nginxClient)
+
+	deployAgent := agent.New(
+		log,
+		startuprecovery.New(deployRepo),
+		recoverybuild.New(deployRepo),
+		getpending.New(deployRepo),
+		getSvc,
+		updatestatus.New(deployRepo, deployRepo),
+		refreshlock.New(deployRepo, deployRepo),
+		deployactivate.New(nginxClient, repo, deployRepo, deployRepo),
+		&sharedssh.Factory{},
+	)
+	deployAgent.Start(ctx)
 
 	router := api.NewRouter(api.RouterDeps{
 		Service: api.NewServiceHandler(api.ServiceHandlerDeps{
