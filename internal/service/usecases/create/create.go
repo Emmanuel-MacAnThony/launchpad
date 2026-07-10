@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/result"
 	"github.com/google/uuid"
 )
@@ -19,16 +20,9 @@ type Repo interface {
 }
 
 type Nginx interface {
-	WriteConfig(serviceID string, opts ...func(*NginxConfig)) error
+	WriteConfig(serviceID string, opts ...func(*nginx.Config)) error
 	ReloadNginx() error
 	DeleteConfig(serviceID string) error
-}
-
-type NginxConfig struct {
-	Domain    string
-	Host      string
-	BluePort  int
-	GreenPort int
 }
 
 // SSHClient checks port availability on a remote host.
@@ -147,18 +141,18 @@ func (uc *UseCase) saveWithRetry(input CreateInput) (domain.Service, error) {
 	return domain.Service{}, ErrIDConflict
 }
 
-func withDomain(d string) func(*NginxConfig) {
-	return func(c *NginxConfig) { c.Domain = d }
+func withDomain(d string) func(*nginx.Config) {
+	return func(c *nginx.Config) { c.Domain = d }
 }
 
-func withHost(h string) func(*NginxConfig) {
-	return func(c *NginxConfig) { c.Host = h }
+func withHost(h string) func(*nginx.Config) {
+	return func(c *nginx.Config) { c.Host = h }
 }
 
-func withBluePort(p int) func(*NginxConfig) {
-	return func(c *NginxConfig) { c.BluePort = p }
+func withBluePort(p int) func(*nginx.Config) {
+	return func(c *nginx.Config) { c.BluePort = p }
 }
 
-func withGreenPort(p int) func(*NginxConfig) {
-	return func(c *NginxConfig) { c.GreenPort = p }
+func withGreenPort(p int) func(*nginx.Config) {
+	return func(c *nginx.Config) { c.GreenPort = p }
 }

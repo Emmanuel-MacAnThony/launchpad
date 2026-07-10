@@ -6,6 +6,7 @@ import (
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
 )
 
 // --- fakes ---
@@ -38,7 +39,7 @@ type fakeNginx struct {
 	reloaded  int
 }
 
-func (n *fakeNginx) WriteConfig(serviceID string, opts ...func(*create.NginxConfig)) error {
+func (n *fakeNginx) WriteConfig(serviceID string, opts ...func(*nginx.Config)) error {
 	if n.writeErr != nil {
 		return n.writeErr
 	}

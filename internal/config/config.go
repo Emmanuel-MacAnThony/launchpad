@@ -10,6 +10,11 @@ type Config struct {
 	Server ServerConfig
 	Notify NotifyConfig
 	Crypto CryptoConfig
+	Nginx  NginxConfig
+}
+
+type NginxConfig struct {
+	BaseDir string
 }
 
 type CryptoConfig struct {
@@ -43,6 +48,9 @@ func Load() Config {
 		},
 		Crypto: CryptoConfig{
 			EncryptionKey: mustEnv("ENCRYPTION_KEY"),
+		},
+		Nginx: NginxConfig{
+			BaseDir: env("NGINX_BASE_DIR", "/etc/launchpad/services"),
 		},
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/api"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/config"
 	appdb "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/db"
+	sharednginx "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
 	deployinfra "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/infra"
 	deploycreate "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/create"
 	deployget "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/getdeploy"
@@ -49,8 +50,10 @@ func main() {
 	pool := appdb.Connect(ctx, cfg.DB.URL)
 	defer pool.Close()
 
+	nginxClient := sharednginx.NewClient(cfg.Nginx.BaseDir)
+
 	repo := infra.NewPostgresServiceRepository(ctx, pool, crypter)
-	createSvc := create.New(repo, nil, nil) // nginx and ssh wired up once implemented
+	createSvc := create.New(repo, nginxClient, nil) // ssh wired up once implemented
 	getSvc := get.New(repo)
 	updateSvc := update.New(repo)
 	listSvc := list.New(repo)
@@ -59,7 +62,7 @@ func main() {
 	createDeploySvc := deploycreate.New(deployRepo)
 	getDeploySvc := deployget.New(deployRepo)
 	listDeploysSvc := deploylist.New(deployRepo)
-	rollbackSvc := deployrollback.New(repo, deployRepo, nil) // nginx wired up once implemented
+	rollbackSvc := deployrollback.New(repo, deployRepo, nginxClient)
 
 	router := api.NewRouter(api.RouterDeps{
 		Service: api.NewServiceHandler(api.ServiceHandlerDeps{
