@@ -2,11 +2,40 @@ package rollback
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	deploydomain "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/domain"
 	servicedomain "github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/result"
 )
+
+// SSHConfig holds connection parameters for the customer server.
+type SSHConfig struct {
+	Host    string
+	User    string
+	KeyPath string
+}
+
+// SSHResult holds the output of a remote command.
+type SSHResult struct {
+	Stdout string
+	Stderr string
+}
+
+// SSHExecutor is a persistent connection to the customer server.
+// Defined here so this use case owns its dependency contract.
+type SSHExecutor interface {
+	Run(cmd string) (SSHResult, error)
+	Upload(localPath, remotePath string) error
+	Close() error
+}
+
+// SSHExecutorFactory dials the customer server and returns an Executor for
+// the lifetime of a single Execute call.
+type SSHExecutorFactory interface {
+	NewExecutor(cfg SSHConfig) (SSHExecutor, error)
+}
 
 type ServiceRepo interface {
 	GetByID(serviceID string) (servicedomain.Service, error)
@@ -19,11 +48,6 @@ type DeployRepo interface {
 	SetStatus(deployID string, newStatus deploydomain.DeployStatus, slot *deploydomain.Slot) error
 }
 
-type NginxClient interface {
-	Switch(serviceID string, slot deploydomain.Slot) error
-	ReloadNginx() error
-}
-
 type RollbackInput struct {
 	ServiceID string
 }
@@ -31,11 +55,11 @@ type RollbackInput struct {
 type UseCase struct {
 	serviceRepo ServiceRepo
 	deployRepo  DeployRepo
-	nginx       NginxClient
+	sshFactory  SSHExecutorFactory
 }
 
-func New(serviceRepo ServiceRepo, deployRepo DeployRepo, nginx NginxClient) *UseCase {
-	return &UseCase{serviceRepo: serviceRepo, deployRepo: deployRepo, nginx: nginx}
+func New(serviceRepo ServiceRepo, deployRepo DeployRepo, sshFactory SSHExecutorFactory) *UseCase {
+	return &UseCase{serviceRepo: serviceRepo, deployRepo: deployRepo, sshFactory: sshFactory}
 }
 
 func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
@@ -73,11 +97,50 @@ func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
 		return result.Fail[struct{}](ErrInternal)
 	}
 
-	if err := uc.nginx.Switch(input.ServiceID, inactiveSlot); err != nil {
+	// Determine the port for the slot we are rolling back to.
+	inactivePort := svc.GreenPort
+	if inactiveSlot == deploydomain.SlotBlue {
+		inactivePort = svc.BluePort
+	}
+
+	config := nginxConfig(svc.Domain, inactivePort)
+
+	tmp, err := os.CreateTemp("", fmt.Sprintf("launchpad-%s-*.conf", svc.ID))
+	if err != nil {
+		return result.Fail[struct{}](ErrInternal)
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.WriteString(config); err != nil {
+		tmp.Close()
+		return result.Fail[struct{}](ErrInternal)
+	}
+	tmp.Close()
+
+	ex, err := uc.sshFactory.NewExecutor(SSHConfig{
+		Host:    svc.Host,
+		User:    svc.SSHUser,
+		KeyPath: svc.SSHKeyPath,
+	})
+	if err != nil {
+		return result.Fail[struct{}](fmt.Errorf("%w: %s", ErrSSHFailed, err))
+	}
+	defer ex.Close()
+
+	remotePath := fmt.Sprintf("/etc/nginx/launchpad/%s.conf", svc.ID)
+
+	if err := ex.Upload(tmp.Name(), remotePath); err != nil {
 		return result.Fail[struct{}](ErrNginxFailed)
 	}
 
-	if err := uc.nginx.ReloadNginx(); err != nil {
+	// Validate before reloading. If invalid, remove the uploaded file so nginx
+	// stays on its current working config.
+	if _, err := ex.Run("nginx -t"); err != nil {
+		ex.Run(fmt.Sprintf("rm -f %s", remotePath))
+		return result.Fail[struct{}](ErrNginxFailed)
+	}
+
+	if _, err := ex.Run("nginx -s reload"); err != nil {
 		return result.Fail[struct{}](ErrNginxFailed)
 	}
 
@@ -98,4 +161,22 @@ func inactive(slot servicedomain.Slot) deploydomain.Slot {
 		return deploydomain.SlotGreen
 	}
 	return deploydomain.SlotBlue
+}
+
+// nginxConfig generates the nginx server block that proxies to the target slot's port.
+func nginxConfig(domain string, port int) string {
+	return fmt.Sprintf(`# Managed by Launchpad — do not edit manually
+server {
+    listen 80;
+    server_name %s;
+
+    location / {
+        proxy_pass http://127.0.0.1:%d;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+`, domain, port)
 }

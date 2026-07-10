@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: launchpad
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # postgres runs *.sql files in this dir alphabetically on first init
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d launchpad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - launchpad-net
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Override the localhost URL from .env to use the docker network service name
+      DATABASE_URL: postgres://postgres:postgres@db:5432/launchpad?sslmode=disable
+      BASE_URL: http://localhost:8090
+    ports:
+      - "8090:8080"
+    networks:
+      - launchpad-net
+
+networks:
+  launchpad-net:
+    driver: bridge
+
+volumes:
+  pgdata:

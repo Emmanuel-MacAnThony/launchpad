@@ -82,6 +82,11 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if payload.Ref != "refs/heads/main" {
+		writeJSON(w, http.StatusOK, map[string]string{"result": "skipped"})
+		return
+	}
+
 	if payload.HeadCommit.ID == "" {
 		writeError(w, http.StatusBadRequest, "missing head commit")
 		return

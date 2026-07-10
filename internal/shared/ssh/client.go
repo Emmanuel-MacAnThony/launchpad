@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"strings"
-
 	"golang.org/x/crypto/ssh"
 )
 
@@ -22,25 +20,8 @@ type SSHResult struct {
 	Stderr string
 }
 
-// SSHClient is the interface satisfied by Client (dial-per-call, used by create use case).
-type SSHClient interface {
-	AreFree(ports ...int) (bool, error)
-}
-
-// Client opens a new SSH connection for each operation.
-// Used by the create use case to check port availability.
-type Client struct {
-	host    string
-	user    string
-	keyPath string
-}
-
-// Factory creates SSH clients and executors.
+// Factory creates SSH executors.
 type Factory struct{}
-
-func (f *Factory) New(host, user, keyPath string) SSHClient {
-	return &Client{host: host, user: user, keyPath: keyPath}
-}
 
 // NewExecutor dials once and returns a persistent Executor for the caller's lifetime.
 // The caller must call Close() when done.
@@ -50,38 +31,6 @@ func (f *Factory) NewExecutor(cfg SSHConfig) (*Executor, error) {
 		return nil, fmt.Errorf("dialing %s: %w", cfg.Host, err)
 	}
 	return &Executor{conn: conn}, nil
-}
-
-func NewClient(host, user, keyPath string) *Client {
-	return &Client{host: host, user: user, keyPath: keyPath}
-}
-
-func (c *Client) AreFree(ports ...int) (bool, error) {
-	conn, err := dial(c.host, c.user, c.keyPath)
-	if err != nil {
-		return false, fmt.Errorf("dialing ssh: %w", err)
-	}
-	defer conn.Close()
-
-	session, err := conn.NewSession()
-	if err != nil {
-		return false, fmt.Errorf("opening ssh session: %w", err)
-	}
-	defer session.Close()
-
-	out, err := session.Output("ss -tln")
-	if err != nil {
-		return false, fmt.Errorf("running ss: %w", err)
-	}
-
-	output := string(out)
-	for _, port := range ports {
-		if strings.Contains(output, fmt.Sprintf(":%d ", port)) {
-			return false, nil
-		}
-	}
-
-	return true, nil
 }
 
 // Executor holds an open SSH connection for a worker's lifetime.

@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: launchpad
+    volumes:
+      - pgdata_test:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d launchpad"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - launchpad-net
+
+  customer:
+    build:
+      context: test
+      dockerfile: customer/Dockerfile
+    # DinD requires privileged mode so dockerd can run inside the container
+    privileged: true
+    hostname: customer
+    volumes:
+      # drive.sh generates this keypair before starting the stack;
+      # entrypoint.sh copies it into ubuntu's authorized_keys at runtime.
+      - ./test/keys/id_rsa.pub:/tmp/launchpad_key.pub:ro
+    healthcheck:
+      test: ["CMD-SHELL", "ss -tln | grep ':22 '"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - launchpad-net
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      customer:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/launchpad?sslmode=disable
+      BASE_URL: http://localhost:8090
+    volumes:
+      # The ssh_key_path stored in the service record points here inside the container
+      - ./test/keys:/keys:ro
+    ports:
+      - "8090:8080"
+    networks:
+      - launchpad-net
+
+networks:
+  launchpad-net:
+    driver: bridge
+
+volumes:
+  pgdata_test:

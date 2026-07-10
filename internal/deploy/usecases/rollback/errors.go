@@ -7,6 +7,7 @@ var (
 	ErrServiceNotFound      = errors.New("service not found")
 	ErrNoActiveDeployment   = errors.New("no active deployment to roll back")
 	ErrNoPreviousDeployment = errors.New("no previous deployment on inactive slot")
-	ErrNginxFailed          = errors.New("nginx switch failed")
+	ErrSSHFailed            = errors.New("failed to connect to host")
+	ErrNginxFailed          = errors.New("nginx operation failed")
 	ErrInternal             = errors.New("internal error")
 )

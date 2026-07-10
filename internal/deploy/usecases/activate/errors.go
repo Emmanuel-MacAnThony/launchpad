@@ -6,6 +6,7 @@ var (
 	ErrValidation     = errors.New("invalid input")
 	ErrDeployNotFound = errors.New("deploy not found")
 	ErrInvalidState   = errors.New("deploy is not in building state")
+	ErrSSHFailed      = errors.New("failed to connect to host")
 	ErrNginxFailed    = errors.New("nginx operation failed")
 	ErrInternal       = errors.New("internal error")
 )

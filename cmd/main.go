@@ -30,23 +30,12 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/get"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/list"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/update"
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/adapters"
 	appdb "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/db"
-	sharednginx "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
 	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/crypto"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/logger"
 )
-
-// sshFactoryAdapter bridges sharedssh.Factory to create.SSHClientFactory.
-// Use-cases define their own interfaces (dependency inversion); neither the
-// use case nor the ssh package should depend on each other. The adapter lives
-// here at the composition root — the one place that's allowed to know about
-// both sides.
-type sshFactoryAdapter struct{ f *sharedssh.Factory }
-
-func (a *sshFactoryAdapter) New(host, user, keyPath string) create.SSHClient {
-	return a.f.New(host, user, keyPath)
-}
 
 func main() {
 	log := logger.New()
@@ -69,10 +58,8 @@ func main() {
 	pool := appdb.Connect(ctx, cfg.DB.URL)
 	defer pool.Close()
 
-	nginxClient := sharednginx.NewClient(cfg.Nginx.BaseDir)
-
 	repo := infra.NewPostgresServiceRepository(ctx, pool, crypter)
-	createSvc := create.New(repo, nginxClient, &sshFactoryAdapter{f: &sharedssh.Factory{}})
+	createSvc := create.New(repo, &adapters.CreateSSHFactoryAdapter{F: &sharedssh.Factory{}})
 
 	getSvc := get.New(repo)
 	updateSvc := update.New(repo)
@@ -82,7 +69,7 @@ func main() {
 	createDeploySvc := deploycreate.New(deployRepo)
 	getDeploySvc := deployget.New(deployRepo)
 	listDeploysSvc := deploylist.New(deployRepo)
-	rollbackSvc := deployrollback.New(repo, deployRepo, nginxClient)
+	rollbackSvc := deployrollback.New(repo, deployRepo, &adapters.RollbackSSHFactoryAdapter{F: &sharedssh.Factory{}})
 
 	deployAgent := agent.New(
 		log,
@@ -92,7 +79,7 @@ func main() {
 		getSvc,
 		updatestatus.New(deployRepo, deployRepo),
 		refreshlock.New(deployRepo, deployRepo),
-		deployactivate.New(nginxClient, repo, deployRepo, deployRepo),
+		deployactivate.New(&adapters.ActivateSSHFactoryAdapter{F: &sharedssh.Factory{}}, repo, deployRepo, deployRepo),
 		&sharedssh.Factory{},
 	)
 	deployAgent.Start(ctx)

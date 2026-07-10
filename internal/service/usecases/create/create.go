@@ -3,15 +3,43 @@ package create
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
-	"github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/result"
 	"github.com/google/uuid"
 )
 
 const maxIDRetries = 3
+
+// SSHConfig holds connection parameters for the customer server.
+type SSHConfig struct {
+	Host    string
+	User    string
+	KeyPath string
+}
+
+// SSHResult holds the output of a remote command.
+type SSHResult struct {
+	Stdout string
+	Stderr string
+}
+
+// SSHExecutor is a persistent connection to the customer server for the
+// lifetime of a single Execute call. Defined here so this use case owns
+// its dependency contract — the concrete sharedssh.Executor satisfies it
+// via an adapter at the composition root.
+type SSHExecutor interface {
+	Run(cmd string) (SSHResult, error)
+	Close() error
+}
+
+// SSHExecutorFactory mirrors the naming from sharedssh.Factory — it dials
+// once and hands back a stateful executor the caller must Close.
+type SSHExecutorFactory interface {
+	NewExecutor(cfg SSHConfig) (SSHExecutor, error)
+}
 
 type Repo interface {
 	Save(service domain.Service) error
@@ -19,32 +47,13 @@ type Repo interface {
 	Delete(id string) error
 }
 
-type Nginx interface {
-	WriteConfig(serviceID string, opts ...func(*nginx.Config)) error
-	ReloadNginx() error
-	DeleteConfig(serviceID string) error
-}
-
-// SSHClient is defined here so this use case owns its dependency contract.
-// The concrete implementation lives in internal/shared/ssh; an adapter at
-// the composition root (main.go) bridges the two without coupling this
-// package to the shared package.
-type SSHClient interface {
-	AreFree(ports ...int) (bool, error)
-}
-
-type SSHClientFactory interface {
-	New(host, user, keyPath string) SSHClient
-}
-
 type UseCase struct {
 	repo       Repo
-	nginx      Nginx
-	sshFactory SSHClientFactory
+	sshFactory SSHExecutorFactory
 }
 
-func New(repo Repo, nginx Nginx, sshFactory SSHClientFactory) *UseCase {
-	return &UseCase{repo: repo, nginx: nginx, sshFactory: sshFactory}
+func New(repo Repo, sshFactory SSHExecutorFactory) *UseCase {
+	return &UseCase{repo: repo, sshFactory: sshFactory}
 }
 
 func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
@@ -67,8 +76,21 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 		return result.Fail[CreateOutput](ErrDomainTaken)
 	}
 
-	ssh := uc.sshFactory.New(input.Host, input.SSHUser, input.SSHKeyPath)
-	free, err := ssh.AreFree(input.BluePort, input.GreenPort)
+	ex, err := uc.sshFactory.NewExecutor(SSHConfig{
+		Host:    input.Host,
+		User:    input.SSHUser,
+		KeyPath: input.SSHKeyPath,
+	})
+	if err != nil {
+		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrSSHFailed, err))
+	}
+	defer ex.Close()
+
+	if err := bootstrap(ex); err != nil {
+		return result.Fail[CreateOutput](err)
+	}
+
+	free, err := portsAreFree(ex, input.BluePort, input.GreenPort)
 	if err != nil {
 		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrPortScanFailed, err))
 	}
@@ -79,17 +101,6 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 	svc, err := uc.saveWithRetry(input)
 	if err != nil {
 		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrPersistFailed, err))
-	}
-
-	if err := uc.nginx.WriteConfig(svc.ID, withDomain(svc.Domain), withHost(svc.Host), withBluePort(svc.BluePort), withGreenPort(svc.GreenPort)); err != nil {
-		uc.repo.Delete(svc.ID)
-		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrNginxConfigFailed, err))
-	}
-
-	if err := uc.nginx.ReloadNginx(); err != nil {
-		uc.nginx.DeleteConfig(svc.ID)
-		uc.repo.Delete(svc.ID)
-		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrNginxReloadFailed, err))
 	}
 
 	return result.Ok(CreateOutput{
@@ -107,6 +118,56 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 		ActiveSlot:     svc.ActiveSlot,
 		CreatedAt:      svc.CreatedAt,
 	})
+}
+
+// bootstrap prepares the customer server to accept Launchpad-managed nginx configs.
+// Creates /etc/nginx/launchpad/ and idempotently adds the include directive to
+// nginx.conf, then validates with nginx -t. No reload here — the first activation
+// triggers the reload when there is actually a service config to serve.
+func bootstrap(ex SSHExecutor) error {
+	// confirm docker is present before committing to the service record
+	if _, err := ex.Run("docker info >/dev/null 2>&1"); err != nil {
+		return ErrDockerNotInstalled
+	}
+
+	// confirm nginx is present; we will write configs into its directory
+	if _, err := ex.Run("nginx -v 2>/dev/null"); err != nil {
+		return ErrNginxNotInstalled
+	}
+
+	if _, err := ex.Run("mkdir -p /etc/nginx/launchpad"); err != nil {
+		return fmt.Errorf("%w: creating launchpad dir: %s", ErrBootstrapFailed, err)
+	}
+
+	// grep exits non-zero when the line is absent — the || branch appends it.
+	// Run returning an error means the SSH command itself failed, not "line not found".
+	includeCmd := `grep -qF 'include /etc/nginx/launchpad/*.conf;' /etc/nginx/nginx.conf || ` +
+		`printf '\ninclude /etc/nginx/launchpad/*.conf;\n' >> /etc/nginx/nginx.conf`
+	if _, err := ex.Run(includeCmd); err != nil {
+		return fmt.Errorf("%w: adding include directive: %s", ErrBootstrapFailed, err)
+	}
+
+	// validate the config parses cleanly with the new include line in place
+	res, err := ex.Run("nginx -t")
+	if err != nil {
+		return fmt.Errorf("%w: nginx -t: %s", ErrBootstrapFailed, res.Stderr)
+	}
+
+	return nil
+}
+
+// portsAreFree checks all given ports in a single ss invocation.
+func portsAreFree(ex SSHExecutor, ports ...int) (bool, error) {
+	res, err := ex.Run("ss -tln")
+	if err != nil {
+		return false, err
+	}
+	for _, port := range ports {
+		if strings.Contains(res.Stdout, fmt.Sprintf(":%d ", port)) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func buildService(input CreateInput) domain.Service {
@@ -140,20 +201,4 @@ func (uc *UseCase) saveWithRetry(input CreateInput) (domain.Service, error) {
 		}
 	}
 	return domain.Service{}, ErrIDConflict
-}
-
-func withDomain(d string) func(*nginx.Config) {
-	return func(c *nginx.Config) { c.Domain = d }
-}
-
-func withHost(h string) func(*nginx.Config) {
-	return func(c *nginx.Config) { c.Host = h }
-}
-
-func withBluePort(p int) func(*nginx.Config) {
-	return func(c *nginx.Config) { c.BluePort = p }
-}
-
-func withGreenPort(p int) func(*nginx.Config) {
-	return func(c *nginx.Config) { c.GreenPort = p }
 }

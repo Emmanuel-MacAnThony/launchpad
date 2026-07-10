@@ -98,6 +98,9 @@ type createServiceRequest struct {
 	Host           string `json:"host"`
 	SSHUser        string `json:"ssh_user"`
 	SSHKeyPath     string `json:"ssh_key_path"`
+	BluePort       int    `json:"blue_port"`
+	GreenPort      int    `json:"green_port"`
+	ContainerPort  int    `json:"container_port"`
 }
 
 func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -116,6 +119,9 @@ func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Host:           req.Host,
 		SSHUser:        req.SSHUser,
 		SSHKeyPath:     req.SSHKeyPath,
+		BluePort:       req.BluePort,
+		GreenPort:      req.GreenPort,
+		ContainerPort:  req.ContainerPort,
 	})
 
 	if res.Err != nil {
@@ -136,8 +142,12 @@ func (h *ServiceHandler) handleCreateError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, create.ErrDomainTaken):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, create.ErrNginxConfigFailed), errors.Is(err, create.ErrNginxReloadFailed):
-		writeError(w, http.StatusInternalServerError, "failed to configure routing")
+	case errors.Is(err, create.ErrSSHFailed):
+		writeError(w, http.StatusBadGateway, "could not connect to host")
+	case errors.Is(err, create.ErrDockerNotInstalled), errors.Is(err, create.ErrNginxNotInstalled):
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+	case errors.Is(err, create.ErrBootstrapFailed):
+		writeError(w, http.StatusInternalServerError, "failed to bootstrap nginx on host")
 	default:
 		writeError(w, http.StatusInternalServerError, "internal server error")
 	}

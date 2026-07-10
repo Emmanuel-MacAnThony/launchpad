@@ -104,6 +104,12 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 			fmt.Sprintf("git clone %s %s", svc.RepoURL, deployBuildDir),
 		},
 		{
+			// Pin to the exact commit that triggered this deploy, not whatever
+			// HEAD is at the time the worker runs.
+			"checkout",
+			fmt.Sprintf("git -C %s checkout %s", deployBuildDir, deploy.CommitSHA),
+		},
+		{
 			"build image",
 			fmt.Sprintf("docker build -t %s %s", imageName, deployBuildDir),
 		},
@@ -122,8 +128,9 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 			// Health check hits the container directly on the host port via localhost,
 			// not through the public URL — nginx still points to the old slot at this
 			// stage, so a request to the domain would miss this container entirely.
+			// Retry for up to ~30s to give the container time to start.
 			"health check",
-			fmt.Sprintf("curl -sf http://localhost:%d%s", port, healthPath(svc.HealthCheckURL)),
+			fmt.Sprintf("curl -sf --retry 10 --retry-delay 3 --retry-all-errors http://localhost:%d%s", port, healthPath(svc.HealthCheckURL)),
 		},
 		{
 			// Clean up the build directory — the image is already stored in Docker,
@@ -151,9 +158,14 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 	// Activate: switch nginx to the new slot, reload nginx, update the service's
 	// active_slot, set deploy status to active, and release the lock.
 	activateRes := a.activate.Execute(activate.ActivateInput{
-		DeployID:  deploy.ID,
-		ServiceID: deploy.ServiceID,
-		Slot:      slot,
+		DeployID:   deploy.ID,
+		ServiceID:  deploy.ServiceID,
+		Slot:       slot,
+		Host:       svc.Host,
+		SSHUser:    svc.SSHUser,
+		SSHKeyPath: svc.SSHKeyPath,
+		Domain:     svc.Domain,
+		ActivePort: port,
 	})
 	if !activateRes.IsOk() {
 		log.Error("worker: activation failed", "err", activateRes.Err)
