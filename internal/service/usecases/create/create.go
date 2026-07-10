@@ -7,6 +7,7 @@ import (
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
+	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/result"
 	"github.com/google/uuid"
 )
@@ -25,15 +26,8 @@ type Nginx interface {
 	DeleteConfig(serviceID string) error
 }
 
-// SSHClient checks port availability on a remote host.
-// The factory pattern is used because connection details vary per service —
-// we cannot inject a single shared client at startup.
-type SSHClient interface {
-	AreFree(ports ...int) (bool, error)
-}
-
 type SSHClientFactory interface {
-	New(host, user, keyPath string) SSHClient
+	New(host, user, keyPath string) sharedssh.SSHClient
 }
 
 type UseCase struct {

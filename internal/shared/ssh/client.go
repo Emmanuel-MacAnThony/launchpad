@@ -1,26 +1,84 @@
 package ssh
 
-// Client performs SSH operations on a remote host.
-// Construct with the host's connection details; methods dial on each call.
-// Real implementation uses golang.org/x/crypto/ssh.
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"golang.org/x/crypto/ssh"
+)
+
+type SSHClient interface {
+	AreFree(ports ...int) (bool, error)
+}
+
 type Client struct {
-	Host    string
-	User    string
-	KeyPath string
+	host    string
+	user    string
+	keyPath string
+}
+
+type Factory struct{}
+
+func (f *Factory) New(host, user, keyPath string) SSHClient {
+	return &Client{host: host, user: user, keyPath: keyPath}
 }
 
 func NewClient(host, user, keyPath string) *Client {
-	return &Client{Host: host, User: user, KeyPath: keyPath}
+	return &Client{host: host, user: user, keyPath: keyPath}
 }
 
-// FindFreePorts scans the host and returns `count` available port numbers.
-func (c *Client) FindFreePorts(count int) ([]int, error) {
-	panic("ssh.Client.FindFreePorts: not implemented")
-}
-
-// AreFree reports whether all given ports are unoccupied on the host.
-// Returns false (not an error) when a port is in use.
-// Returns an error only when the SSH connection or remote command fails.
 func (c *Client) AreFree(ports ...int) (bool, error) {
-	panic("ssh.Client.AreFree: not implemented")
+	conn, err := c.dial()
+	if err != nil {
+		return false, fmt.Errorf("dialing ssh: %w", err)
+	}
+	defer conn.Close()
+
+	session, err := conn.NewSession()
+	if err != nil {
+		return false, fmt.Errorf("opening ssh session: %w", err)
+	}
+	defer session.Close()
+
+	out, err := session.Output("ss -tln")
+	if err != nil {
+		return false, fmt.Errorf("running ss: %w", err)
+	}
+
+	output := string(out)
+	for _, port := range ports {
+		if strings.Contains(output, fmt.Sprintf(":%d ", port)) {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func (c *Client) dial() (*ssh.Client, error) {
+	keyBytes, err := os.ReadFile(c.keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading key file: %w", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parsing private key: %w", err)
+	}
+
+	cfg := &ssh.ClientConfig{
+		User:            c.user,
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
+		// InsecureIgnoreHostKey skips server identity verification (MITM risk).
+		// In production, verify against a known host key from config or known_hosts.
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	conn, err := ssh.Dial("tcp", c.host+":22", cfg)
+	if err != nil {
+		return nil, fmt.Errorf("connecting to %s: %w", c.host, err)
+	}
+
+	return conn, nil
 }

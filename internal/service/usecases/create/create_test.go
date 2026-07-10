@@ -7,6 +7,7 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/usecases/create"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
+	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 )
 
 // --- fakes ---
@@ -65,9 +66,9 @@ type fakeSSHClient struct {
 
 func (s *fakeSSHClient) AreFree(_ ...int) (bool, error) { return s.free, s.err }
 
-type fakeSSHFactory struct{ client create.SSHClient }
+type fakeSSHFactory struct{ client sharedssh.SSHClient }
 
-func (f *fakeSSHFactory) New(_, _, _ string) create.SSHClient { return f.client }
+func (f *fakeSSHFactory) New(_, _, _ string) sharedssh.SSHClient { return f.client }
 
 // --- helpers ---
 

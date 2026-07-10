@@ -15,6 +15,7 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/config"
 	appdb "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/db"
 	sharednginx "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
+	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 	deployinfra "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/infra"
 	deploycreate "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/create"
 	deployget "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/usecases/getdeploy"
@@ -53,7 +54,8 @@ func main() {
 	nginxClient := sharednginx.NewClient(cfg.Nginx.BaseDir)
 
 	repo := infra.NewPostgresServiceRepository(ctx, pool, crypter)
-	createSvc := create.New(repo, nginxClient, nil) // ssh wired up once implemented
+	createSvc := create.New(repo, nginxClient, &sharedssh.Factory{})
+
 	getSvc := get.New(repo)
 	updateSvc := update.New(repo)
 	listSvc := list.New(repo)
