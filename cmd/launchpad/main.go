@@ -30,6 +30,17 @@ import (
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/logger"
 )
 
+// sshFactoryAdapter bridges sharedssh.Factory to create.SSHClientFactory.
+// Use-cases define their own interfaces (dependency inversion); neither the
+// use case nor the ssh package should depend on each other. The adapter lives
+// here at the composition root — the one place that's allowed to know about
+// both sides.
+type sshFactoryAdapter struct{ f *sharedssh.Factory }
+
+func (a *sshFactoryAdapter) New(host, user, keyPath string) create.SSHClient {
+	return a.f.New(host, user, keyPath)
+}
+
 func main() {
 	log := logger.New()
 	cfg := config.Load()
@@ -54,7 +65,7 @@ func main() {
 	nginxClient := sharednginx.NewClient(cfg.Nginx.BaseDir)
 
 	repo := infra.NewPostgresServiceRepository(ctx, pool, crypter)
-	createSvc := create.New(repo, nginxClient, &sharedssh.Factory{})
+	createSvc := create.New(repo, nginxClient, &sshFactoryAdapter{f: &sharedssh.Factory{}})
 
 	getSvc := get.New(repo)
 	updateSvc := update.New(repo)

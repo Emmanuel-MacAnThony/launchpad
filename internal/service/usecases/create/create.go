@@ -7,7 +7,6 @@ import (
 
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
 	"github.com/Emmanuel-MacAnThony/launchpad/internal/shared/nginx"
-	sharedssh "github.com/Emmanuel-MacAnThony/launchpad/internal/shared/ssh"
 	"github.com/Emmanuel-MacAnThony/launchpad/pkg/result"
 	"github.com/google/uuid"
 )
@@ -26,8 +25,16 @@ type Nginx interface {
 	DeleteConfig(serviceID string) error
 }
 
+// SSHClient is defined here so this use case owns its dependency contract.
+// The concrete implementation lives in internal/shared/ssh; an adapter at
+// the composition root (main.go) bridges the two without coupling this
+// package to the shared package.
+type SSHClient interface {
+	AreFree(ports ...int) (bool, error)
+}
+
 type SSHClientFactory interface {
-	New(host, user, keyPath string) sharedssh.SSHClient
+	New(host, user, keyPath string) SSHClient
 }
 
 type UseCase struct {
