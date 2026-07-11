@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans: 'JetBrains Mono', monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --color-status-active: #00ff41;
+  --color-status-building: #f59e0b;
+  --color-status-pending: #6b7280;
+  --color-status-failed: #ef4444;
+  --color-status-rolledback: #a78bfa;
+
+  --color-slot-blue: #60a5fa;
+  --color-slot-green: #00ff41;
+}
+
+/* Terminal dark theme — always dark, no light mode toggle */
+:root {
+  --background: #0a0b0d;
+  --foreground: #d4e8d4;
+  --card: #0f1210;
+  --card-foreground: #d4e8d4;
+  --primary: #00ff41;
+  --primary-foreground: #000000;
+  --muted: #0f1410;
+  --muted-foreground: #4a6048;
+  --border: #1a2318;
+  --ring: #00ff41;
+  --destructive: #ef4444;
+  --sidebar: #080a08;
+  --sidebar-border: #141a12;
+  --sidebar-foreground: #c8dcc8;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Override Next.js default */
+#__next, main { height: 100%; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1a2318; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #2a3a28; }
+
+::selection {
+  background: rgba(0, 255, 65, 0.15);
+  color: #00ff41;
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* Scanline texture for terminal feel */
+.scanlines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+/* Blinking cursor animation */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: blink 1.2s step-end infinite;
+}
+
+/* Pulse dot for active status */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); }
+  50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(0, 255, 65, 0); }
+}
+
+.pulse-active {
+  animation: pulse-green 2s ease-in-out infinite;
+}
