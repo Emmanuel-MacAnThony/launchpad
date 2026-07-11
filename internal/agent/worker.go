@@ -163,13 +163,14 @@ networks:
 			fmt.Sprintf("git -C %s checkout %s", deployBuildDir, deploy.CommitSHA),
 		},
 		{
-			// Compose merges (not replaces) port lists in overrides — strip the host
-			// binding for the managed container port from the ephemeral build copy.
-			// Deletes the ports: key too; an empty ports: is invalid YAML for Compose.
+			// Compose merges (not replaces) port lists in overrides — strip host
+			// bindings for the managed container port from only the app service.
+			// Drops the ports: key entirely if no entries remain (empty ports: is
+			// invalid YAML). Other services' port bindings are untouched.
 			"strip app ports",
 			fmt.Sprintf(
-				`perl -i -0777 -pe 's/\n([ \t]+ports:)(\n[ \t]+-[ \t]+"?[0-9]+:%d"?)+(?=\n)//g' %s/docker-compose.yml`,
-				svc.ContainerPort, deployBuildDir,
+				`awk '/^  %s:$/{s=1}/^  [^ ]/{if(!/^  %s:$/)s=0}s&&/^    ports:$/{p=1;h=$0;next}p&&/^      -/{if(!/:%d"?\s*$/)e=e"\n"$0;next}p{if(e)print h e;e="";p=0}{print}' %s/docker-compose.yml > /tmp/lp_cs.yml && mv /tmp/lp_cs.yml %s/docker-compose.yml`,
+				svc.ComposeSvc, svc.ComposeSvc, svc.ContainerPort, deployBuildDir, deployBuildDir,
 			),
 		},
 		{
