@@ -97,12 +97,26 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 	overridePath := fmt.Sprintf("/tmp/launchpad-overrides/%s.yml", projectName)
 
 	// Generate the Compose override locally and upload it to the customer server.
-	// The override pins the host port and container name for this slot without
-	// touching the user's docker-compose.yml — their repo stays unchanged.
-	overrideYAML := fmt.Sprintf(
-		"services:\n  %s:\n    container_name: %s\n    ports:\n      - \"%d:%d\"\n    restart: unless-stopped\n",
+	// The override pins the slot port, container name, and connects the app to the
+	// shared infra network where supporting services (db, cache, etc.) live.
+	// Supporting services are never part of the blue/green swap — they persist
+	// under the stable "{serviceName}" project across all deployments.
+	overrideYAML := fmt.Sprintf(`services:
+  %s:
+    container_name: %s
+    ports:
+      - "%d:%d"
+    networks:
+      - launchpad_infra
+    restart: unless-stopped
+networks:
+  launchpad_infra:
+    external: true
+    name: %s_default
+`,
 		svc.ComposeSvc,
 		projectName, port, svc.ContainerPort,
+		svc.Name,
 	)
 	tmpOverride, err := os.CreateTemp("", "launchpad-override-*.yml")
 	if err != nil {
@@ -149,13 +163,34 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 			fmt.Sprintf("git -C %s checkout %s", deployBuildDir, deploy.CommitSHA),
 		},
 		{
-			// Compose merges docker-compose.yml with the Launchpad override, which
-			// sets the host port and container name for this slot. The user's repo
-			// is never modified. --build forces a fresh image on every deploy.
+			// Compose merges (not replaces) port lists in overrides — strip the host
+			// binding for the managed container port from the ephemeral build copy.
+			// Deletes the ports: key too; an empty ports: is invalid YAML for Compose.
+			"strip app ports",
+			fmt.Sprintf(
+				`perl -i -0777 -pe 's/\n([ \t]+ports:)(\n[ \t]+-[ \t]+"?[0-9]+:%d"?)+(?=\n)//g' %s/docker-compose.yml`,
+				svc.ContainerPort, deployBuildDir,
+			),
+		},
+		{
+			// Start supporting services (db, cache, queues) under the service's
+			// stable project name. The app service is excluded (--scale=0) because
+			// Launchpad manages it per-slot. This command is idempotent — running
+			// services are not restarted, so the db is never interrupted mid-deploy.
+			"start infra",
+			fmt.Sprintf(
+				"docker compose -f %s/docker-compose.yml -p %s up -d --scale %s=0",
+				deployBuildDir, svc.Name, svc.ComposeSvc,
+			),
+		},
+		{
+			// Deploy only the app service into the slot project. --no-deps skips
+			// restarting infra services. The override connects the app to the shared
+			// infra network so it can reach db/cache by their service-name hostnames.
 			"compose up",
 			fmt.Sprintf(
-				"docker compose -f %s/docker-compose.yml -f %s -p %s up -d --build",
-				deployBuildDir, overridePath, projectName,
+				"docker compose -f %s/docker-compose.yml -f %s -p %s up -d --build --no-deps %s",
+				deployBuildDir, overridePath, projectName, svc.ComposeSvc,
 			),
 		},
 		{
