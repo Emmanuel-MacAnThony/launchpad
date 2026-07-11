@@ -10,7 +10,9 @@ UPDATE deploys SET status = 'building', slot = $2, started_at = NOW() WHERE id =
 UPDATE deploys SET status = $2, finished_at = NOW() WHERE id = $1;
 
 -- name: CreateDeployLock :exec
-INSERT INTO deploy_locks (deploy_id, expires_at) VALUES ($1, $2);
+INSERT INTO deploy_locks (deploy_id, expires_at) VALUES ($1, $2)
+ON CONFLICT (deploy_id) DO UPDATE
+  SET locked_at = NOW(), expires_at = EXCLUDED.expires_at, released_at = NULL;
 
 -- name: ReleaseDeployLock :exec
 UPDATE deploy_locks SET released_at = NOW() WHERE deploy_id = $1 AND released_at IS NULL;

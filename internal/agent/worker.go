@@ -169,6 +169,7 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 	})
 	if !activateRes.IsOk() {
 		log.Error("worker: activation failed", "err", activateRes.Err)
+		markFailed()
 		return
 	}
 

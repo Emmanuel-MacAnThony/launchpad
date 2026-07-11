@@ -14,6 +14,8 @@ import (
 
 const createDeployLock = `-- name: CreateDeployLock :exec
 INSERT INTO deploy_locks (deploy_id, expires_at) VALUES ($1, $2)
+ON CONFLICT (deploy_id) DO UPDATE
+  SET locked_at = NOW(), expires_at = EXCLUDED.expires_at, released_at = NULL
 `
 
 type CreateDeployLockParams struct {
