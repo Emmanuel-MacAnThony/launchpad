@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -149,7 +150,8 @@ networks:
 	}
 	log.Info("worker: compose override uploaded", "path", overridePath)
 
-	steps := []struct {
+	// Phase 1: get the exact source onto the host.
+	sourceSteps := []struct {
 		name string
 		cmd  string
 	}{
@@ -162,17 +164,44 @@ networks:
 			"checkout",
 			fmt.Sprintf("git -C %s checkout %s", deployBuildDir, deploy.CommitSHA),
 		},
-		{
-			// Compose merges (not replaces) port lists in overrides — strip host
-			// bindings for the managed container port from only the app service.
-			// Drops the ports: key entirely if no entries remain (empty ports: is
-			// invalid YAML). Other services' port bindings are untouched.
-			"strip app ports",
-			fmt.Sprintf(
-				`awk '/^  %s:$/{s=1}/^  [^ ]/{if(!/^  %s:$/)s=0}s&&/^    ports:$/{p=1;h=$0;next}p&&/^      -/{if(!/:%d"?\s*$/)e=e"\n"$0;next}p{if(e)print h e;e="";p=0}{print}' %s/docker-compose.yml > /tmp/lp_cs.yml && mv /tmp/lp_cs.yml %s/docker-compose.yml`,
-				svc.ComposeSvc, svc.ComposeSvc, svc.ContainerPort, deployBuildDir, deployBuildDir,
-			),
-		},
+	}
+	for _, step := range sourceSteps {
+		if _, err := executor.Run(step.cmd); err != nil {
+			log.Error("worker: build step failed", "step", step.name, "err", err)
+			cancelRefresh()
+			markFailed()
+			return
+		}
+		log.Info("worker: step complete", "step", step.name)
+	}
+
+	// Enforce the no-published-ports contract for the app service. Launchpad
+	// assigns each slot's host port via the override; Compose MERGES (never
+	// replaces) port lists, so if the app's own compose file also publishes a host
+	// port, both slots inherit it and fight over the same host port. We validate
+	// with Docker's own parser — so YAML formatting, tabs, and flow syntax can't
+	// fool us — and fail loudly instead of silently rewriting the customer's file.
+	cfg, err := executor.Run(fmt.Sprintf(
+		"docker compose -f %s/docker-compose.yml config --format json", deployBuildDir))
+	if err != nil {
+		log.Error("worker: compose config failed", "err", err)
+		cancelRefresh()
+		markFailed()
+		return
+	}
+	if err := assertNoPublishedPorts(cfg.Stdout, svc.ComposeSvc); err != nil {
+		log.Error("worker: port contract violation", "err", err)
+		cancelRefresh()
+		markFailed()
+		return
+	}
+	log.Info("worker: port contract satisfied", "service", svc.ComposeSvc)
+
+	// Phase 2: bring up infra + the slot's app, health check, clean up.
+	deploySteps := []struct {
+		name string
+		cmd  string
+	}{
 		{
 			// Start supporting services (db, cache, queues) under the service's
 			// stable project name. The app service is excluded (--scale=0) because
@@ -212,7 +241,7 @@ networks:
 		},
 	}
 
-	for _, step := range steps {
+	for _, step := range deploySteps {
 		if _, err := executor.Run(step.cmd); err != nil {
 			log.Error("worker: build step failed", "step", step.name, "err", err)
 			cancelRefresh()
@@ -286,6 +315,44 @@ func slotPort(svc serviceget.GetOutput, slot deploydomain.Slot) int {
 		return svc.GreenPort
 	}
 	return svc.BluePort
+}
+
+// assertNoPublishedPorts parses `docker compose config --format json` output and
+// returns an error if the named service publishes any host port. A published port
+// has a non-empty "published" field; container-only ports (no host binding) are
+// fine. This is the enforcement half of the "Launchpad owns the slot port"
+// contract — the app service must leave host-port assignment to the override.
+func assertNoPublishedPorts(configJSON, service string) error {
+	var cfg struct {
+		Services map[string]struct {
+			Ports []struct {
+				Published string `json:"published"`
+				Target    int    `json:"target"`
+			} `json:"ports"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return fmt.Errorf("parsing compose config: %w", err)
+	}
+
+	svc, ok := cfg.Services[service]
+	if !ok {
+		return fmt.Errorf("service %q not found in compose file", service)
+	}
+
+	var published []string
+	for _, p := range svc.Ports {
+		if p.Published != "" {
+			published = append(published, fmt.Sprintf("%s:%d", p.Published, p.Target))
+		}
+	}
+	if len(published) > 0 {
+		return fmt.Errorf(
+			"service %q must not publish host ports (found %v) — Launchpad assigns the slot port; remove the host bindings under 'ports:' from your compose file",
+			service, published,
+		)
+	}
+	return nil
 }
 
 // healthPath extracts the path from a full URL for the SSH health check curl.

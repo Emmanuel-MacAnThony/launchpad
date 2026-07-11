@@ -79,13 +79,13 @@ Raw output in [`screenshots/zero-downtime-run.txt`](screenshots/zero-downtime-ru
 **Launchpad Server** — an HTTP mux plus a background deploy engine that:
 1. Accepts a git webhook at `/webhooks/{serviceID}` and enqueues a deploy record
 2. Picks up pending deploys, acquires a per-service lock, and runs the build over SSH on the customer server
-3. Clones the repo, strips the app's host-port binding, starts supporting services, builds the app into the **idle** slot
+3. Clones the repo, validates the app service publishes no host ports, starts supporting services, builds the app into the **idle** slot
 4. Health-checks the new slot over `localhost`, then rewrites the service's nginx config to point at the new slot and reloads
 5. Marks the deploy active, updates the service's active slot, releases the lock
 
 **Deploy engine** (`internal/agent`) — four cooperating pieces:
 - **Scheduler** — polls for pending deploys and dispatches one worker per service (never two for the same service at once)
-- **Worker** — owns a single deploy's state machine: clone → checkout → strip ports → start infra → build → health check → swap → cleanup
+- **Worker** — owns a single deploy's state machine: clone → checkout → validate ports → start infra → build → health check → swap → cleanup
 - **Refresher** — a heartbeat goroutine that bumps the deploy lock's `expires_at` while the build runs; stops on crash
 - **Recovery scanner** — finds deploys whose lock expired (agent died mid-build) and resets them to pending
 
@@ -182,6 +182,8 @@ curl -X POST http://localhost:8090/services \
 
 The response includes a webhook URL. Point your git provider's push webhook at it.
 
+> **Contract:** your app service (`compose_service`) must **not** publish host ports in its `docker-compose.yml`. Launchpad assigns each slot's host port for you. Supporting services (db, cache) can publish ports freely. A deploy whose app service publishes a host port is rejected before build, with a message naming the binding to remove.
+
 ### 5. Push to deploy
 
 Every push to the registered repo now triggers a zero-downtime deploy. Watch it land in the dashboard.
@@ -257,8 +259,8 @@ Every push to the registered repo now triggers a zero-downtime deploy. Watch it 
 **Why the app container only, and never the database?**
 During a swap both slots are alive at once, both talking to the one shared database. If a deploy also swapped or migrated the db in a breaking way, the still-running old slot would break — reintroducing the downtime you were trying to kill, and risking your data. Launchpad's scope is deliberately the stateless app; stateful services are attached resources that persist across deploys. Scope is the safety feature.
 
-**Why strip the app's host-port binding on every deploy?**
-Docker Compose *merges* port lists in overrides, it never replaces them. If the app's compose file hardcodes `8080:8080`, both blue and green would try to bind host port 8080 and the second slot would fail. Launchpad rewrites only the app service's port block in an ephemeral clone of the compose file (never the source repo, never other services) so each slot binds only its own slot port.
+**Why the app service must not publish host ports (and how it's enforced)?**
+Docker Compose *merges* port lists in overrides, it never replaces them. So if the app's compose file hardcodes `8080:8080`, that binding rides along into *both* slots on top of the slot port Launchpad injects — blue and green then fight over host port 8080. Rather than surgically editing the customer's file (fragile — YAML has tabs, flow syntax, anchors), Launchpad makes it a **contract**: the app service publishes no host ports; Launchpad assigns the slot port via its override. It's enforced at deploy time by running `docker compose config --format json` — Docker's own parser — and asserting the app service publishes nothing. A violation fails the deploy loudly, before anything is built, with a message telling the user which binding to remove. Supporting services (db, cache) publish ports freely; the contract applies only to the managed app service.
 
 **Why a dead-man's-switch lock instead of a timeout?**
 A build can take 30 seconds or 10 minutes — a fixed timeout makes fast builds pay for slow ones, and a crashed agent leaves a deploy stuck in `building` forever. Instead the worker sets `expires_at` on the lock and a refresher goroutine bumps it forward while the build makes progress. Crash → refreshes stop → the lock lapses → the recovery scanner resets the deploy to pending. The heartbeat proves liveness; it doesn't guess a duration.

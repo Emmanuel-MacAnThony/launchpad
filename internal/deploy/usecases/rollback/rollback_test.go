@@ -37,11 +37,14 @@ type stubDeployRepo struct {
 	setStatusCalled bool
 }
 
-func (r *stubDeployRepo) GetActiveForService(_ string) (deploydomain.Deploy, error) {
-	return r.activeDeploy, r.activeErr
-}
-
-func (r *stubDeployRepo) GetLatestOnSlot(_ string, _ deploydomain.Slot) (deploydomain.Deploy, error) {
+// GetLatestOnSlot is called once per slot: for the active slot (blue in these
+// fixtures) it returns the current live deploy; for the inactive slot (green) it
+// returns the deploy being rolled back to. The stub keys off the slot so both
+// calls can be exercised independently.
+func (r *stubDeployRepo) GetLatestOnSlot(_ string, slot deploydomain.Slot) (deploydomain.Deploy, error) {
+	if slot == deploydomain.SlotBlue {
+		return r.activeDeploy, r.activeErr
+	}
 	return r.latestDeploy, r.latestErr
 }
 
