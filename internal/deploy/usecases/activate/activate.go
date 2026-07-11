@@ -14,7 +14,7 @@ import (
 type SSHConfig struct {
 	Host    string
 	User    string
-	KeyPath string
+	KeyBytes []byte
 }
 
 // SSHResult holds the output of a remote command.
@@ -59,7 +59,7 @@ type ActivateInput struct {
 	// the service from DB. Passing them here avoids a second DB lookup in activate.
 	Host       string
 	SSHUser    string
-	SSHKeyPath string
+	SSHKey string
 	Domain     string
 	ActivePort int // resolved port for the target slot (blue or green)
 }
@@ -82,7 +82,7 @@ func New(sshFactory SSHExecutorFactory, serviceRepo ServiceRepo, deployRepo Depl
 
 func (uc *UseCase) Execute(input ActivateInput) result.Result[struct{}] {
 	if input.DeployID == "" || input.ServiceID == "" || input.Slot == "" ||
-		input.Host == "" || input.SSHUser == "" || input.SSHKeyPath == "" ||
+		input.Host == "" || input.SSHUser == "" || input.SSHKey == "" ||
 		input.Domain == "" || input.ActivePort == 0 {
 		return result.Fail[struct{}](ErrValidation)
 	}
@@ -117,9 +117,9 @@ func (uc *UseCase) Execute(input ActivateInput) result.Result[struct{}] {
 	tmp.Close()
 
 	ex, err := uc.sshFactory.NewExecutor(SSHConfig{
-		Host:    input.Host,
-		User:    input.SSHUser,
-		KeyPath: input.SSHKeyPath,
+		Host:     input.Host,
+		User:     input.SSHUser,
+		KeyBytes: []byte(input.SSHKey),
 	})
 	if err != nil {
 		return result.Fail[struct{}](fmt.Errorf("%w: %s", ErrSSHFailed, err))

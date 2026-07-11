@@ -26,7 +26,7 @@ services:
     environment:
       # Override the localhost URL from .env to use the docker network service name
       DATABASE_URL: postgres://postgres:postgres@db:5432/launchpad?sslmode=disable
-      BASE_URL: http://localhost:8090
+      BASE_URL: https://getup-avid-tried.ngrok-free.dev
     ports:
       - "8090:8080"
     networks:

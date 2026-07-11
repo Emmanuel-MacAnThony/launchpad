@@ -53,7 +53,9 @@ func (uc *UseCase) Execute(input UpdateInput) result.Result[UpdateOutput] {
 		HealthCheckURL: svc.HealthCheckURL,
 		Host:           svc.Host,
 		SSHUser:        svc.SSHUser,
-		SSHKeyPath:     svc.SSHKeyPath,
+		SSHKey:     svc.SSHKey,
+		ComposeSvc:     svc.ComposeSvc,
+		ActiveSlot:     svc.ActiveSlot,
 		CreatedAt:      svc.CreatedAt,
 	})
 }

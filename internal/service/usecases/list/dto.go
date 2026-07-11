@@ -1,6 +1,10 @@
 package list
 
-import "time"
+import (
+	"time"
+
+	"github.com/Emmanuel-MacAnThony/launchpad/internal/service/domain"
+)
 
 type ListInput struct{}
 
@@ -12,7 +16,9 @@ type ListItem struct {
 	HealthCheckURL string
 	Host           string
 	SSHUser        string
-	SSHKeyPath     string
+	SSHKey     string
+	ComposeSvc     string
+	ActiveSlot     *domain.Slot
 	CreatedAt      time.Time
 }
 

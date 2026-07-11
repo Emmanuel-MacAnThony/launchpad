@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	deploydomain "github.com/Emmanuel-MacAnThony/launchpad/internal/deploy/domain"
@@ -79,9 +80,9 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 	// Open one SSH connection for the entire build — each command reuses this
 	// session instead of re-dialing for every step.
 	executor, err := a.sshFactory.NewExecutor(sharedssh.SSHConfig{
-		Host:    svc.Host,
-		User:    svc.SSHUser,
-		KeyPath: svc.SSHKeyPath,
+		Host:     svc.Host,
+		User:     svc.SSHUser,
+		KeyBytes: []byte(svc.SSHKey),
 	})
 	if err != nil {
 		log.Error("worker: failed to open SSH connection", "err", err)
@@ -91,9 +92,48 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 	}
 	defer executor.Close()
 
-	imageName := fmt.Sprintf("%s:%s", svc.Name, deploy.CommitSHA[:7])
-	containerName := fmt.Sprintf("%s-%s", svc.Name, slot)
+	projectName := fmt.Sprintf("%s-%s", svc.Name, slot)
 	deployBuildDir := fmt.Sprintf("%s/%s", buildDir, deploy.ID)
+	overridePath := fmt.Sprintf("/tmp/launchpad-overrides/%s.yml", projectName)
+
+	// Generate the Compose override locally and upload it to the customer server.
+	// The override pins the host port and container name for this slot without
+	// touching the user's docker-compose.yml — their repo stays unchanged.
+	overrideYAML := fmt.Sprintf(
+		"services:\n  %s:\n    container_name: %s\n    ports:\n      - \"%d:%d\"\n    restart: unless-stopped\n",
+		svc.ComposeSvc,
+		projectName, port, svc.ContainerPort,
+	)
+	tmpOverride, err := os.CreateTemp("", "launchpad-override-*.yml")
+	if err != nil {
+		log.Error("worker: failed to create override temp file", "err", err)
+		cancelRefresh()
+		markFailed()
+		return
+	}
+	defer os.Remove(tmpOverride.Name())
+	if _, err := tmpOverride.WriteString(overrideYAML); err != nil {
+		tmpOverride.Close()
+		log.Error("worker: failed to write override file", "err", err)
+		cancelRefresh()
+		markFailed()
+		return
+	}
+	tmpOverride.Close()
+
+	if _, err := executor.Run("mkdir -p /tmp/launchpad-overrides"); err != nil {
+		log.Error("worker: failed to create overrides dir on host", "err", err)
+		cancelRefresh()
+		markFailed()
+		return
+	}
+	if err := executor.Upload(tmpOverride.Name(), overridePath); err != nil {
+		log.Error("worker: failed to upload compose override", "err", err)
+		cancelRefresh()
+		markFailed()
+		return
+	}
+	log.Info("worker: compose override uploaded", "path", overridePath)
 
 	steps := []struct {
 		name string
@@ -104,37 +144,33 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 			fmt.Sprintf("git clone %s %s", svc.RepoURL, deployBuildDir),
 		},
 		{
-			// Pin to the exact commit that triggered this deploy, not whatever
-			// HEAD is at the time the worker runs.
+			// Pin to the exact commit that triggered this deploy.
 			"checkout",
 			fmt.Sprintf("git -C %s checkout %s", deployBuildDir, deploy.CommitSHA),
 		},
 		{
-			"build image",
-			fmt.Sprintf("docker build -t %s %s", imageName, deployBuildDir),
+			// Compose merges docker-compose.yml with the Launchpad override, which
+			// sets the host port and container name for this slot. The user's repo
+			// is never modified. --build forces a fresh image on every deploy.
+			"compose up",
+			fmt.Sprintf(
+				"docker compose -f %s/docker-compose.yml -f %s -p %s up -d --build",
+				deployBuildDir, overridePath, projectName,
+			),
 		},
 		{
-			// Stop and remove the existing container on this slot if one is running.
-			// The || true prevents failure when no container exists (e.g. first deploy).
-			"stop old container",
-			fmt.Sprintf("docker stop %s 2>/dev/null || true && docker rm %s 2>/dev/null || true", containerName, containerName),
-		},
-		{
-			"run container",
-			fmt.Sprintf("docker run -d -p %d:%d --name %s --restart unless-stopped %s",
-				port, svc.ContainerPort, containerName, imageName),
-		},
-		{
-			// Health check hits the container directly on the host port via localhost,
-			// not through the public URL — nginx still points to the old slot at this
-			// stage, so a request to the domain would miss this container entirely.
-			// Retry for up to ~30s to give the container time to start.
+			// Health check via localhost so we bypass nginx (still pointing at old slot).
+			// Compose builds take longer than raw docker run — allow up to 2 minutes.
 			"health check",
-			fmt.Sprintf("curl -sf --retry 10 --retry-delay 3 --retry-all-errors http://localhost:%d%s", port, healthPath(svc.HealthCheckURL)),
+			fmt.Sprintf(
+				"curl -sf --retry 30 --retry-delay 4 --retry-all-errors http://localhost:%d%s",
+				port, healthPath(svc.HealthCheckURL),
+			),
 		},
 		{
-			// Clean up the build directory — the image is already stored in Docker,
-			// so the source is no longer needed on disk.
+			// Remove the cloned source — the image layers are cached in Docker.
+			// The override file at /tmp/launchpad-overrides/ is intentionally kept
+			// so docker compose can reference it if the stack needs to be torn down.
 			"cleanup",
 			fmt.Sprintf("rm -rf %s", deployBuildDir),
 		},
@@ -163,7 +199,7 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 		Slot:       slot,
 		Host:       svc.Host,
 		SSHUser:    svc.SSHUser,
-		SSHKeyPath: svc.SSHKeyPath,
+		SSHKey: svc.SSHKey,
 		Domain:     svc.Domain,
 		ActivePort: port,
 	})
@@ -173,7 +209,7 @@ func (a *Agent) runWorker(ctx context.Context, deploy deploydomain.Deploy) {
 		return
 	}
 
-	log.Info("worker: deploy complete", "slot", slot, "image", imageName)
+	log.Info("worker: deploy complete", "slot", slot, "project", projectName)
 }
 
 func (a *Agent) runRefresher(ctx context.Context, deployID string) {

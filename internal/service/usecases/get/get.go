@@ -41,11 +41,12 @@ func (uc *UseCase) Execute(input GetInput) result.Result[GetOutput] {
 		HealthCheckURL: svc.HealthCheckURL,
 		Host:           svc.Host,
 		SSHUser:        svc.SSHUser,
-		SSHKeyPath:     svc.SSHKeyPath,
+		SSHKey:     svc.SSHKey,
 		WebhookSecret:  svc.WebhookSecret,
 		BluePort:       svc.BluePort,
 		GreenPort:      svc.GreenPort,
 		ContainerPort:  svc.ContainerPort,
+		ComposeSvc:     svc.ComposeSvc,
 		ActiveSlot:     svc.ActiveSlot,
 		CreatedAt:      svc.CreatedAt,
 	})

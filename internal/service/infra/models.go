@@ -37,10 +37,11 @@ type Service struct {
 	WebhookSecret  string
 	Host           string
 	SshUser        string
-	SshKeyPath     string
+	SshPrivateKey  string
 	CreatedAt      pgtype.Timestamptz
 	BluePort       int32
 	GreenPort      int32
 	ContainerPort  int32
 	ActiveSlot     pgtype.Text
+	ComposeService string
 }

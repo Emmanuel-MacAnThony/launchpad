@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+
 	"golang.org/x/crypto/ssh"
 )
 
 // SSHConfig holds the connection parameters for an SSH session.
 type SSHConfig struct {
-	Host    string
-	User    string
-	KeyPath string
+	Host     string
+	User     string
+	KeyBytes []byte // decrypted private key content provided by the customer
 }
 
 // SSHResult holds the output of a remote command.
@@ -26,7 +27,7 @@ type Factory struct{}
 // NewExecutor dials once and returns a persistent Executor for the caller's lifetime.
 // The caller must call Close() when done.
 func (f *Factory) NewExecutor(cfg SSHConfig) (*Executor, error) {
-	conn, err := dial(cfg.Host, cfg.User, cfg.KeyPath)
+	conn, err := dial(cfg.Host, cfg.User, cfg.KeyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("dialing %s: %w", cfg.Host, err)
 	}
@@ -82,13 +83,7 @@ func (e *Executor) Close() error {
 	return e.conn.Close()
 }
 
-// dial is shared by both Client and Factory.NewExecutor.
-func dial(host, user, keyPath string) (*ssh.Client, error) {
-	keyBytes, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading key file: %w", err)
-	}
-
+func dial(host, user string, keyBytes []byte) (*ssh.Client, error) {
 	signer, err := ssh.ParsePrivateKey(keyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("parsing private key: %w", err)
@@ -97,8 +92,6 @@ func dial(host, user, keyPath string) (*ssh.Client, error) {
 	cfg := &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		// InsecureIgnoreHostKey skips server identity verification (MITM risk).
-		// In production, verify against a known host key from config or known_hosts.
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 

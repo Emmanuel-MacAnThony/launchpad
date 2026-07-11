@@ -15,9 +15,9 @@ const maxIDRetries = 3
 
 // SSHConfig holds connection parameters for the customer server.
 type SSHConfig struct {
-	Host    string
-	User    string
-	KeyPath string
+	Host     string
+	User     string
+	KeyBytes []byte
 }
 
 // SSHResult holds the output of a remote command.
@@ -59,9 +59,12 @@ func New(repo Repo, sshFactory SSHExecutorFactory) *UseCase {
 func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 	if input.Name == "" || input.RepoURL == "" || input.Domain == "" ||
 		input.HealthCheckURL == "" || input.WebhookSecret == "" ||
-		input.Host == "" || input.SSHUser == "" || input.SSHKeyPath == "" ||
+		input.Host == "" || input.SSHUser == "" || input.SSHKey == "" ||
 		input.BluePort == 0 || input.GreenPort == 0 || input.ContainerPort == 0 {
 		return result.Fail[CreateOutput](ErrInvalidInput)
+	}
+	if input.ComposeSvc == "" {
+		input.ComposeSvc = "app"
 	}
 
 	if input.BluePort == input.GreenPort {
@@ -77,9 +80,9 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 	}
 
 	ex, err := uc.sshFactory.NewExecutor(SSHConfig{
-		Host:    input.Host,
-		User:    input.SSHUser,
-		KeyPath: input.SSHKeyPath,
+		Host:     input.Host,
+		User:     input.SSHUser,
+		KeyBytes: []byte(input.SSHKey),
 	})
 	if err != nil {
 		return result.Fail[CreateOutput](fmt.Errorf("%w: %s", ErrSSHFailed, err))
@@ -111,10 +114,11 @@ func (uc *UseCase) Execute(input CreateInput) result.Result[CreateOutput] {
 		HealthCheckURL: svc.HealthCheckURL,
 		Host:           svc.Host,
 		SSHUser:        svc.SSHUser,
-		SSHKeyPath:     svc.SSHKeyPath,
+		SSHKey:     svc.SSHKey,
 		BluePort:       svc.BluePort,
 		GreenPort:      svc.GreenPort,
 		ContainerPort:  svc.ContainerPort,
+		ComposeSvc:     svc.ComposeSvc,
 		ActiveSlot:     svc.ActiveSlot,
 		CreatedAt:      svc.CreatedAt,
 	})
@@ -179,10 +183,11 @@ func buildService(input CreateInput) domain.Service {
 		WebhookSecret:  input.WebhookSecret,
 		Host:           input.Host,
 		SSHUser:        input.SSHUser,
-		SSHKeyPath:     input.SSHKeyPath,
+		SSHKey:     input.SSHKey,
 		BluePort:       input.BluePort,
 		GreenPort:      input.GreenPort,
 		ContainerPort:  input.ContainerPort,
+		ComposeSvc:     input.ComposeSvc,
 		ActiveSlot:     nil,
 		CreatedAt:      time.Now().UTC(),
 	}

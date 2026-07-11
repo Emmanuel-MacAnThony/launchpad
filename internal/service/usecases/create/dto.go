@@ -14,10 +14,11 @@ type CreateInput struct {
 	WebhookSecret  string
 	Host           string
 	SSHUser        string
-	SSHKeyPath     string
+	SSHKey     string
 	BluePort       int
 	GreenPort      int
 	ContainerPort  int
+	ComposeSvc     string
 }
 
 type CreateOutput struct {
@@ -28,10 +29,11 @@ type CreateOutput struct {
 	HealthCheckURL string
 	Host           string
 	SSHUser        string
-	SSHKeyPath     string
+	SSHKey     string
 	BluePort       int
 	GreenPort      int
 	ContainerPort  int
+	ComposeSvc     string
 	ActiveSlot     *domain.Slot // nil = never deployed
 	CreatedAt      time.Time
 }

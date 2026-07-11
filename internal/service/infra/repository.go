@@ -30,6 +30,11 @@ func (r *PostgresServiceRepository) Save(svc domain.Service) error {
 		return fmt.Errorf("encrypting webhook secret: %w", err)
 	}
 
+	encryptedSSHKey, err := r.crypter.Encrypt(svc.SSHKey)
+	if err != nil {
+		return fmt.Errorf("encrypting ssh key: %w", err)
+	}
+
 	var activeSlot pgtype.Text
 	if svc.ActiveSlot != nil {
 		activeSlot = pgtype.Text{String: string(*svc.ActiveSlot), Valid: true}
@@ -44,10 +49,11 @@ func (r *PostgresServiceRepository) Save(svc domain.Service) error {
 		WebhookSecret:  encryptedSecret,
 		Host:           svc.Host,
 		SshUser:        svc.SSHUser,
-		SshKeyPath:     svc.SSHKeyPath,
+		SshPrivateKey:  encryptedSSHKey,
 		BluePort:       int32(svc.BluePort),
 		GreenPort:      int32(svc.GreenPort),
 		ContainerPort:  int32(svc.ContainerPort),
+		ComposeService: svc.ComposeSvc,
 		ActiveSlot:     activeSlot,
 	})
 	if err != nil {
@@ -77,8 +83,8 @@ func (r *PostgresServiceRepository) GetByID(id string) (domain.Service, error) {
 		return domain.Service{}, fmt.Errorf("getting service: %w", err)
 	}
 	return r.rowToDomain(row.ID, row.Name, row.RepoUrl, row.Domain, row.HealthCheckUrl,
-		row.WebhookSecret, row.Host, row.SshUser, row.SshKeyPath,
-		row.BluePort, row.GreenPort, row.ContainerPort, row.ActiveSlot, row.CreatedAt)
+		row.WebhookSecret, row.Host, row.SshUser, row.SshPrivateKey,
+		row.BluePort, row.GreenPort, row.ContainerPort, row.ComposeService, row.ActiveSlot, row.CreatedAt)
 }
 
 func (r *PostgresServiceRepository) ListAll() ([]domain.Service, error) {
@@ -89,8 +95,8 @@ func (r *PostgresServiceRepository) ListAll() ([]domain.Service, error) {
 	svcs := make([]domain.Service, len(rows))
 	for i, row := range rows {
 		svc, err := r.rowToDomain(row.ID, row.Name, row.RepoUrl, row.Domain, row.HealthCheckUrl,
-			row.WebhookSecret, row.Host, row.SshUser, row.SshKeyPath,
-			row.BluePort, row.GreenPort, row.ContainerPort, row.ActiveSlot, row.CreatedAt)
+			row.WebhookSecret, row.Host, row.SshUser, row.SshPrivateKey,
+			row.BluePort, row.GreenPort, row.ContainerPort, row.ComposeService, row.ActiveSlot, row.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -121,14 +127,20 @@ func (r *PostgresServiceRepository) Update(id, name, healthCheckURL string) erro
 }
 
 func (r *PostgresServiceRepository) rowToDomain(
-	id, name, repoURL, svcDomain, healthCheckURL, webhookSecret, host, sshUser, sshKeyPath string,
+	id, name, repoURL, svcDomain, healthCheckURL, webhookSecret, host, sshUser, sshPrivateKey string,
 	bluePort, greenPort, containerPort int32,
+	composeSvc string,
 	activeSlot pgtype.Text,
 	createdAt pgtype.Timestamptz,
 ) (domain.Service, error) {
 	decryptedSecret, err := r.crypter.Decrypt(webhookSecret)
 	if err != nil {
 		return domain.Service{}, fmt.Errorf("decrypting webhook secret: %w", err)
+	}
+
+	decryptedSSHKey, err := r.crypter.Decrypt(sshPrivateKey)
+	if err != nil {
+		return domain.Service{}, fmt.Errorf("decrypting ssh key: %w", err)
 	}
 
 	var slot *domain.Slot
@@ -146,10 +158,11 @@ func (r *PostgresServiceRepository) rowToDomain(
 		WebhookSecret:  decryptedSecret,
 		Host:           host,
 		SSHUser:        sshUser,
-		SSHKeyPath:     sshKeyPath,
+		SSHKey:         decryptedSSHKey,
 		BluePort:       int(bluePort),
 		GreenPort:      int(greenPort),
 		ContainerPort:  int(containerPort),
+		ComposeSvc:     composeSvc,
 		ActiveSlot:     slot,
 		CreatedAt:      createdAt.Time,
 	}, nil

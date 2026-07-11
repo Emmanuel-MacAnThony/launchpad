@@ -14,7 +14,7 @@ import (
 type SSHConfig struct {
 	Host    string
 	User    string
-	KeyPath string
+	KeyBytes []byte
 }
 
 // SSHResult holds the output of a remote command.
@@ -118,9 +118,9 @@ func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
 	tmp.Close()
 
 	ex, err := uc.sshFactory.NewExecutor(SSHConfig{
-		Host:    svc.Host,
-		User:    svc.SSHUser,
-		KeyPath: svc.SSHKeyPath,
+		Host:     svc.Host,
+		User:     svc.SSHUser,
+		KeyBytes: []byte(svc.SSHKey),
 	})
 	if err != nil {
 		return result.Fail[struct{}](fmt.Errorf("%w: %s", ErrSSHFailed, err))

@@ -23,7 +23,7 @@ func (a *CreateSSHExecutorAdapter) Close() error { return a.Ex.Close() }
 type CreateSSHFactoryAdapter struct{ F *sharedssh.Factory }
 
 func (a *CreateSSHFactoryAdapter) NewExecutor(cfg create.SSHConfig) (create.SSHExecutor, error) {
-	ex, err := a.F.NewExecutor(sharedssh.SSHConfig{Host: cfg.Host, User: cfg.User, KeyPath: cfg.KeyPath})
+	ex, err := a.F.NewExecutor(sharedssh.SSHConfig{Host: cfg.Host, User: cfg.User, KeyBytes: cfg.KeyBytes})
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (a *ActivateSSHExecutorAdapter) Close() error { return a.Ex.Close() }
 type ActivateSSHFactoryAdapter struct{ F *sharedssh.Factory }
 
 func (a *ActivateSSHFactoryAdapter) NewExecutor(cfg activate.SSHConfig) (activate.SSHExecutor, error) {
-	ex, err := a.F.NewExecutor(sharedssh.SSHConfig{Host: cfg.Host, User: cfg.User, KeyPath: cfg.KeyPath})
+	ex, err := a.F.NewExecutor(sharedssh.SSHConfig{Host: cfg.Host, User: cfg.User, KeyBytes: cfg.KeyBytes})
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (a *RollbackSSHExecutorAdapter) Close() error { return a.Ex.Close() }
 type RollbackSSHFactoryAdapter struct{ F *sharedssh.Factory }
 
 func (a *RollbackSSHFactoryAdapter) NewExecutor(cfg rollback.SSHConfig) (rollback.SSHExecutor, error) {
-	ex, err := a.F.NewExecutor(sharedssh.SSHConfig{Host: cfg.Host, User: cfg.User, KeyPath: cfg.KeyPath})
+	ex, err := a.F.NewExecutor(sharedssh.SSHConfig{Host: cfg.Host, User: cfg.User, KeyBytes: cfg.KeyBytes})
 	if err != nil {
 		return nil, err
 	}

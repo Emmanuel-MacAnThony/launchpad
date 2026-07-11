@@ -56,23 +56,32 @@ func (h *ServiceHandler) RegisterRoutes(mux *http.ServeMux) {
 // ── shared response ───────────────────────────────────────
 
 type serviceResponse struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	RepoURL        string `json:"repo_url"`
-	Domain         string `json:"domain"`
-	HealthCheckURL string `json:"health_check_url"`
-	Host           string `json:"host"`
-	SSHUser        string `json:"ssh_user"`
-	SSHKeyPath     string `json:"ssh_key_path"`
-	WebhookURL     string `json:"webhook_url"`
-	CreatedAt      string `json:"created_at"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	RepoURL        string  `json:"repo_url"`
+	Domain         string  `json:"domain"`
+	HealthCheckURL string  `json:"health_check_url"`
+	Host           string  `json:"host"`
+	SSHUser        string  `json:"ssh_user"`
+	WebhookURL     string  `json:"webhook_url"`
+	ComposeSvc     string  `json:"compose_service"`
+	ActiveSlot     *string `json:"active_slot"`
+	CreatedAt      string  `json:"created_at"`
 }
 
 func (h *ServiceHandler) webhookURL(id string) string {
 	return fmt.Sprintf("%s/webhooks/%s", h.deps.BaseURL, id)
 }
 
-func toServiceResponse(id, name, repoURL, domain, healthCheckURL, host, sshUser, sshKeyPath, webhookURL string, createdAt time.Time) serviceResponse {
+func activeSlotString[T ~string](slot *T) *string {
+	if slot == nil {
+		return nil
+	}
+	s := string(*slot)
+	return &s
+}
+
+func toServiceResponse(id, name, repoURL, domain, healthCheckURL, host, sshUser, webhookURL, composeSvc string, activeSlot *string, createdAt time.Time) serviceResponse {
 	return serviceResponse{
 		ID:             id,
 		Name:           name,
@@ -81,8 +90,9 @@ func toServiceResponse(id, name, repoURL, domain, healthCheckURL, host, sshUser,
 		HealthCheckURL: healthCheckURL,
 		Host:           host,
 		SSHUser:        sshUser,
-		SSHKeyPath:     sshKeyPath,
 		WebhookURL:     webhookURL,
+		ComposeSvc:     composeSvc,
+		ActiveSlot:     activeSlot,
 		CreatedAt:      createdAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 }
@@ -97,10 +107,11 @@ type createServiceRequest struct {
 	WebhookSecret  string `json:"webhook_secret"`
 	Host           string `json:"host"`
 	SSHUser        string `json:"ssh_user"`
-	SSHKeyPath     string `json:"ssh_key_path"`
+	SSHKey         string `json:"ssh_private_key"`
 	BluePort       int    `json:"blue_port"`
 	GreenPort      int    `json:"green_port"`
 	ContainerPort  int    `json:"container_port"`
+	ComposeSvc     string `json:"compose_service"`
 }
 
 func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -118,10 +129,11 @@ func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		WebhookSecret:  req.WebhookSecret,
 		Host:           req.Host,
 		SSHUser:        req.SSHUser,
-		SSHKeyPath:     req.SSHKeyPath,
+		SSHKey:         req.SSHKey,
 		BluePort:       req.BluePort,
 		GreenPort:      req.GreenPort,
 		ContainerPort:  req.ContainerPort,
+		ComposeSvc:     req.ComposeSvc,
 	})
 
 	if res.Err != nil {
@@ -132,7 +144,7 @@ func (h *ServiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	v := res.Value
 	writeJSON(w, http.StatusCreated, toServiceResponse(
 		v.ID, v.Name, v.RepoURL, v.Domain, v.HealthCheckURL,
-		v.Host, v.SSHUser, v.SSHKeyPath, h.webhookURL(v.ID), v.CreatedAt,
+		v.Host, v.SSHUser, h.webhookURL(v.ID), v.ComposeSvc, nil, v.CreatedAt,
 	))
 }
 
@@ -167,7 +179,7 @@ func (h *ServiceHandler) Get(w http.ResponseWriter, r *http.Request) {
 	v := res.Value
 	writeJSON(w, http.StatusOK, toServiceResponse(
 		v.ID, v.Name, v.RepoURL, v.Domain, v.HealthCheckURL,
-		v.Host, v.SSHUser, v.SSHKeyPath, h.webhookURL(v.ID), v.CreatedAt,
+		v.Host, v.SSHUser, h.webhookURL(v.ID), v.ComposeSvc, activeSlotString(v.ActiveSlot), v.CreatedAt,
 	))
 }
 
@@ -212,7 +224,7 @@ func (h *ServiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	v := res.Value
 	writeJSON(w, http.StatusOK, toServiceResponse(
 		v.ID, v.Name, v.RepoURL, v.Domain, v.HealthCheckURL,
-		v.Host, v.SSHUser, v.SSHKeyPath, h.webhookURL(v.ID), v.CreatedAt,
+		v.Host, v.SSHUser, h.webhookURL(v.ID), v.ComposeSvc, activeSlotString(v.ActiveSlot), v.CreatedAt,
 	))
 }
 
@@ -240,7 +252,7 @@ func (h *ServiceHandler) List(w http.ResponseWriter, r *http.Request) {
 	for i, svc := range res.Value.Services {
 		items[i] = toServiceResponse(
 			svc.ID, svc.Name, svc.RepoURL, svc.Domain, svc.HealthCheckURL,
-			svc.Host, svc.SSHUser, svc.SSHKeyPath, h.webhookURL(svc.ID), svc.CreatedAt,
+			svc.Host, svc.SSHUser, h.webhookURL(svc.ID), svc.ComposeSvc, activeSlotString(svc.ActiveSlot), svc.CreatedAt,
 		)
 	}
 

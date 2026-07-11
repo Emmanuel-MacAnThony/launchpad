@@ -17,9 +17,25 @@ export interface Service {
   health_check_url: string;
   host: string;
   ssh_user: string;
-  ssh_key_path: string;
   webhook_url: string;
+  compose_service: string;
+  active_slot: Slot | null;
   created_at: string;
+}
+
+export interface CreateServiceInput {
+  name: string;
+  repo_url: string;
+  domain: string;
+  health_check_url: string;
+  webhook_secret: string;
+  host: string;
+  ssh_user: string;
+  ssh_private_key: string;
+  blue_port: number;
+  green_port: number;
+  container_port: number;
+  compose_service: string;
 }
 
 export interface Deploy {
@@ -54,6 +70,12 @@ export const api = {
 
   listDeploys: (serviceID: string) =>
     request<Deploy[]>(`/services/${serviceID}/deploys`),
+
+  createService: (input: CreateServiceInput) =>
+    request<Service>("/services", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 
   rollback: (serviceID: string) =>
     request<{ status: string }>(`/services/${serviceID}/rollback`, {

@@ -18,11 +18,12 @@ type GetOutput struct {
 	HealthCheckURL string
 	Host           string
 	SSHUser        string
-	SSHKeyPath     string
+	SSHKey     string
 	WebhookSecret  string // decrypted; server-side only — never expose in HTTP responses
 	BluePort       int
 	GreenPort      int
 	ContainerPort  int
+	ComposeSvc     string
 	ActiveSlot     *domain.Slot
 	CreatedAt      time.Time
 }

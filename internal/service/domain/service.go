@@ -18,10 +18,11 @@ type Service struct {
 	WebhookSecret  string    `json:"-"`
 	Host           string    `json:"host"`
 	SSHUser        string    `json:"ssh_user"`
-	SSHKeyPath     string    `json:"ssh_key_path"`
+	SSHKey         string    `json:"-"` // encrypted at rest; never returned in API responses
 	BluePort       int       `json:"blue_port"`
 	GreenPort      int       `json:"green_port"`
 	ContainerPort  int       `json:"container_port"`
-	ActiveSlot     *Slot     `json:"active_slot"` // nil = never deployed
+	ComposeSvc     string    `json:"compose_service"` // the service name in docker-compose.yml to override
+	ActiveSlot     *Slot     `json:"active_slot"`     // nil = never deployed
 	CreatedAt      time.Time `json:"created_at"`
 }
