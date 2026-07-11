@@ -1,10 +1,26 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Oswald, Anton } from "next/font/google";
 import "./globals.css";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-jetbrains",
+  display: "swap",
+});
+
+// Sidebar: Oswald — tall, condensed, slightly rounded
+const oswald = Oswald({
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+  variable: "--font-oswald",
+  display: "swap",
+});
+
+// Header: Anton — very tight, bold, no-nonsense compressed
+const anton = Anton({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-anton",
   display: "swap",
 });
 
@@ -19,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`dark ${jetbrainsMono.variable} ${oswald.variable} ${anton.variable}`}>
       <body className="font-mono">{children}</body>
     </html>
   );

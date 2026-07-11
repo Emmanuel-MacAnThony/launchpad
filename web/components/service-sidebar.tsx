@@ -138,14 +138,22 @@ export function ServiceSidebar({ selectedId, onSelect }: Props) {
                     onClick={() => onSelect(svc.id)}
                     title={svc.name}
                     className={cn(
-                      "relative w-full flex items-center justify-center h-9 transition-colors",
+                      "relative w-full flex items-center justify-center h-9 transition-colors cursor-pointer",
                       isSelected ? "bg-[#6366f1]/[0.08]" : "hover:bg-[#111113]"
                     )}
                   >
                     {isSelected && (
                       <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-[#6366f1]" />
                     )}
-                    {dot}
+                    <span className={cn(
+                      "text-[12px] font-semibold font-mono uppercase",
+                      isSelected ? "text-[#a5b4fc]" : isActive ? "text-[#71717a]" : "text-[#3f3f46]"
+                    )}>
+                      {svc.name[0]}
+                    </span>
+                    {isActive && (
+                      <span className="absolute bottom-1 right-1.5 w-1 h-1 rounded-full bg-[#6366f1]/70" />
+                    )}
                   </button>
                 );
               }
@@ -155,7 +163,7 @@ export function ServiceSidebar({ selectedId, onSelect }: Props) {
                   key={svc.id}
                   onClick={() => onSelect(svc.id)}
                   className={cn(
-                    "relative w-full flex items-center gap-2.5 pl-4 pr-3 py-2 text-left transition-colors",
+                    "relative w-full flex items-center gap-2.5 pl-4 pr-3 py-2 text-left transition-colors cursor-pointer",
                     isSelected
                       ? "bg-[#6366f1]/[0.08] text-[#f4f4f5]"
                       : "text-[#71717a] hover:bg-[#111113] hover:text-[#d4d4d8]"
@@ -165,7 +173,7 @@ export function ServiceSidebar({ selectedId, onSelect }: Props) {
                     <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full bg-[#6366f1]" />
                   )}
                   {dot}
-                  <span className="text-[13px] truncate font-mono capitalize">{svc.name}</span>
+                  <span className="text-[14px] truncate uppercase tracking-wide" style={{ fontFamily: "var(--font-oswald)" }}>{svc.name}</span>
                 </button>
               );
             })}
@@ -184,10 +192,7 @@ export function ServiceSidebar({ selectedId, onSelect }: Props) {
             {collapsed ? (
               <ChevronRight className="w-3.5 h-3.5" />
             ) : (
-              <>
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span className="text-[11px] whitespace-nowrap">Collapse</span>
-              </>
+              <ChevronLeft className="w-3.5 h-3.5" />
             )}
           </button>
         </div>

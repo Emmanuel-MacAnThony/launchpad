@@ -43,7 +43,6 @@ type ServiceRepo interface {
 }
 
 type DeployRepo interface {
-	GetActiveForService(serviceID string) (deploydomain.Deploy, error)
 	GetLatestOnSlot(serviceID string, slot deploydomain.Slot) (deploydomain.Deploy, error)
 	SetStatus(deployID string, newStatus deploydomain.DeployStatus, slot *deploydomain.Slot) error
 }
@@ -79,7 +78,8 @@ func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
 		return result.Fail[struct{}](ErrNoActiveDeployment)
 	}
 
-	currentActive, err := uc.deployRepo.GetActiveForService(input.ServiceID)
+	activeSlot := deploydomain.Slot(*svc.ActiveSlot)
+	currentActive, err := uc.deployRepo.GetLatestOnSlot(input.ServiceID, activeSlot)
 	if err != nil {
 		if errors.Is(err, deploydomain.ErrNotFound) {
 			return result.Fail[struct{}](ErrNoActiveDeployment)
@@ -89,7 +89,7 @@ func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
 
 	inactiveSlot := inactive(*svc.ActiveSlot)
 
-	_, err = uc.deployRepo.GetLatestOnSlot(input.ServiceID, inactiveSlot)
+	target, err := uc.deployRepo.GetLatestOnSlot(input.ServiceID, inactiveSlot)
 	if err != nil {
 		if errors.Is(err, deploydomain.ErrNotFound) {
 			return result.Fail[struct{}](ErrNoPreviousDeployment)
@@ -150,6 +150,10 @@ func (uc *UseCase) Execute(input RollbackInput) result.Result[struct{}] {
 	}
 
 	if err := uc.deployRepo.SetStatus(currentActive.ID, deploydomain.StatusRolledBack, nil); err != nil {
+		return result.Fail[struct{}](ErrInternal)
+	}
+
+	if err := uc.deployRepo.SetStatus(target.ID, deploydomain.StatusActive, nil); err != nil {
 		return result.Fail[struct{}](ErrInternal)
 	}
 
