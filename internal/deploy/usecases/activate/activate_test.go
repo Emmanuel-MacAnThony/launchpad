@@ -92,7 +92,7 @@ func validInput() activate.ActivateInput {
 		Slot:       deploydomain.SlotBlue,
 		Host:       "192.168.1.1",
 		SSHUser:    "ubuntu",
-		SSHKeyPath: "/home/ubuntu/.ssh/id_rsa",
+		SSHKey:     "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-key\n-----END OPENSSH PRIVATE KEY-----",
 		Domain:     "my-app.com",
 		ActivePort: 3001,
 	}

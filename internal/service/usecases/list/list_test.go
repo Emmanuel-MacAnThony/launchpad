@@ -25,8 +25,8 @@ func (r *fakeRepo) ListAll() ([]domain.Service, error) {
 func TestList_HappyPath(t *testing.T) {
 	now := time.Now().UTC()
 	repo := &fakeRepo{svcs: []domain.Service{
-		{ID: "svc-1", Name: "app-one", RepoURL: "git@github.com:u/a.git", Domain: "a.com", HealthCheckURL: "http://a.com/health", Host: "1.1.1.1", SSHUser: "ubuntu", SSHKeyPath: "/key", CreatedAt: now},
-		{ID: "svc-2", Name: "app-two", RepoURL: "git@github.com:u/b.git", Domain: "b.com", HealthCheckURL: "http://b.com/health", Host: "2.2.2.2", SSHUser: "ubuntu", SSHKeyPath: "/key", CreatedAt: now},
+		{ID: "svc-1", Name: "app-one", RepoURL: "git@github.com:u/a.git", Domain: "a.com", HealthCheckURL: "http://a.com/health", Host: "1.1.1.1", SSHUser: "ubuntu", SSHKey: "fake-key", CreatedAt: now},
+		{ID: "svc-2", Name: "app-two", RepoURL: "git@github.com:u/b.git", Domain: "b.com", HealthCheckURL: "http://b.com/health", Host: "2.2.2.2", SSHUser: "ubuntu", SSHKey: "fake-key", CreatedAt: now},
 	}}
 	uc := list.New(repo)
 

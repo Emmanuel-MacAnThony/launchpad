@@ -33,7 +33,7 @@ func stubService() domain.Service {
 		HealthCheckURL: "http://my-app.com/health",
 		Host:           "192.168.1.1",
 		SSHUser:        "ubuntu",
-		SSHKeyPath:     "/home/ubuntu/.ssh/id_rsa",
+		SSHKey:     "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-key\n-----END OPENSSH PRIVATE KEY-----",
 		CreatedAt:      time.Now().UTC(),
 	}
 }

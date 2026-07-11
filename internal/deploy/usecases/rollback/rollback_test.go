@@ -87,7 +87,7 @@ var activeService = servicedomain.Service{
 	ID:         "svc-1",
 	Host:       "10.0.0.1",
 	SSHUser:    "ubuntu",
-	SSHKeyPath: "/home/ubuntu/.ssh/id_rsa",
+	SSHKey:     "-----BEGIN OPENSSH PRIVATE KEY-----\nfake-key\n-----END OPENSSH PRIVATE KEY-----",
 	Domain:     "app.example.com",
 	BluePort:   3001,
 	GreenPort:  3002,

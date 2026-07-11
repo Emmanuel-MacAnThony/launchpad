@@ -12,6 +12,18 @@ RUN apt-get update && apt-get install -y \
     docker.io \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Docker Compose v2 plugin — docker.io from apt doesn't bundle it.
+# Detect arch so the image builds correctly on both amd64 and arm64.
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64)  COMPOSE_ARCH="x86_64"  ;; \
+        aarch64) COMPOSE_ARCH="aarch64" ;; \
+    esac && \
+    mkdir -p /usr/local/lib/docker/cli-plugins && \
+    curl -fsSL "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-${COMPOSE_ARCH}" \
+        -o /usr/local/lib/docker/cli-plugins/docker-compose && \
+    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
 # Create the ubuntu user and add it to the docker group so SSH sessions can run docker commands
 RUN useradd -m -s /bin/bash ubuntu \
     && usermod -aG docker ubuntu \

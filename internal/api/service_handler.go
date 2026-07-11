@@ -155,13 +155,19 @@ func (h *ServiceHandler) handleCreateError(w http.ResponseWriter, err error) {
 	case errors.Is(err, create.ErrDomainTaken):
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, create.ErrSSHFailed):
-		writeError(w, http.StatusBadGateway, "could not connect to host")
+		writeError(w, http.StatusBadGateway, err.Error())
 	case errors.Is(err, create.ErrDockerNotInstalled), errors.Is(err, create.ErrNginxNotInstalled):
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, create.ErrBootstrapFailed):
-		writeError(w, http.StatusInternalServerError, "failed to bootstrap nginx on host")
+		writeError(w, http.StatusInternalServerError, err.Error())
+	case errors.Is(err, create.ErrPortConflict):
+		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, create.ErrPortScanFailed):
+		writeError(w, http.StatusBadGateway, err.Error())
+	case errors.Is(err, create.ErrPersistFailed):
+		writeError(w, http.StatusInternalServerError, err.Error())
 	default:
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		writeError(w, http.StatusInternalServerError, err.Error())
 	}
 }
 

@@ -8,10 +8,10 @@ export default function HomePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#09090b]">
       <ServiceSidebar selectedId={selectedId} onSelect={setSelectedId} />
 
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#0a0b0d]">
+      <main className="flex-1 flex flex-col overflow-hidden bg-grid-dark">
         {selectedId ? (
           <ServiceDetail key={selectedId} serviceId={selectedId} />
         ) : (
@@ -24,24 +24,23 @@ export default function HomePage() {
 
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center px-8">
-      <pre className="text-[#1a2318] text-xs leading-tight select-none hidden sm:block">
-        {`
-  ██╗      █████╗ ██╗   ██╗███╗   ██╗ ██████╗██╗  ██╗██████╗  █████╗ ██████╗
-  ██║     ██╔══██╗██║   ██║████╗  ██║██╔════╝██║  ██║██╔══██╗██╔══██╗██╔══██╗
-  ██║     ███████║██║   ██║██╔██╗ ██║██║     ███████║██████╔╝███████║██║  ██║
-  ██║     ██╔══██║██║   ██║██║╚██╗██║██║     ██╔══██║██╔═══╝ ██╔══██║██║  ██║
-  ███████╗██║  ██║╚██████╔╝██║ ╚████║╚██████╗██║  ██║██║     ██║  ██║██████╔╝
-  ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═════╝
-        `}
+    <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center px-8">
+      <div className="overflow-hidden hidden sm:block">
+      <pre className="ascii-art text-[#6366f1]/[0.08] text-[11px] leading-tight select-none font-mono">
+        {`██╗      █████╗ ██╗   ██╗███╗   ██╗ ██████╗██╗  ██╗██████╗  █████╗ ██████╗
+██║     ██╔══██╗██║   ██║████╗  ██║██╔════╝██║  ██║██╔══██╗██╔══██╗██╔══██╗
+██║     ███████║██║   ██║██╔██╗ ██║██║     ███████║██████╔╝███████║██║  ██║
+██║     ██╔══██║██║   ██║██║╚██╗██║██║     ██╔══██║██╔═══╝ ██╔══██║██║  ██║
+███████╗██║  ██║╚██████╔╝██║ ╚████║╚██████╗██║  ██║██║     ██║  ██║██████╔╝
+╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═════╝`}
       </pre>
-      <div className="space-y-2">
-        <p className="text-[#4a6048] text-sm font-mono">
-          $ select a service from the sidebar
-          <span className="cursor-blink">_</span>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-[14px] text-[#a1a1aa]">
+          Select a service from the sidebar
         </p>
-        <p className="text-[#2a3a28] text-xs font-mono">
-          zero-downtime blue/green deployments
+        <p className="text-[12px] text-[#52525b]">
+          Zero-downtime blue/green deployments
         </p>
       </div>
     </div>
